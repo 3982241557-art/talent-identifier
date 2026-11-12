@@ -1,0 +1,61 @@
+import { chromium } from 'playwright-core'
+
+const CHROME =
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const browser = await chromium.launch({
+  executablePath: CHROME,
+  headless: true,
+  args: ['--no-sandbox'],
+})
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const errors = []
+page.on('pageerror', (e) => errors.push(`PAGEERROR: ${e.message}`))
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(m.text())
+})
+page.on('requestfailed', (r) =>
+  errors.push(`REQFAIL: ${r.url()} ${r.failure()?.errorText}`),
+)
+
+/* 全新用户：清掉所有存档，走完整 intro → form 流程 */
+await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+await page.evaluate(() => localStorage.clear())
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForTimeout(1500)
+
+/* 进入表单 */
+const startBtn = page
+  .locator('button')
+  .filter({ hasText: '进入探索' })
+  .first()
+if (await startBtn.count()) {
+  await startBtn.click({ force: true })
+} else {
+  await page.locator('button').first().click({ force: true })
+}
+await page.waitForTimeout(2500)
+
+const state = await page.evaluate(() => {
+  const selects = [...document.querySelectorAll('select')]
+  return {
+    pageText: document.body.innerText.slice(0, 260).replace(/\n+/g, ' | '),
+    selects: selects.map((s) => ({
+      label:
+        s.closest('label')?.innerText?.split('\n')[0]?.trim() ?? '?',
+      disabled: s.disabled,
+      value: s.value,
+      placeholder: s.options[0]?.text ?? '',
+      optionCount: s.options.length,
+    })),
+  }
+})
+console.log('页面文本:', state.pageText)
+console.log('\n下拉框:')
+for (const s of state.selects) {
+  console.log(
+    `  ${s.label}: disabled=${s.disabled} value="${s.value}" placeholder="${s.placeholder}" options=${s.optionCount}`,
+  )
+}
+console.log('\nERRORS:', errors.length ? errors : 'none')
+await page.screenshot({ path: '/tmp/v9-cascader.png' })
+await browser.close()

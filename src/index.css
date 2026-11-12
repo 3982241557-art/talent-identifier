@@ -1,0 +1,639 @@
+@import "tailwindcss";
+
+@theme {
+  /* ---- 衬线排版体系 ---- */
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+  --font-display: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+  --font-sans: "Noto Serif SC", "Songti SC", system-ui, sans-serif;
+
+  /* ---- 宇宙色板：深蓝 / 极白 / 暗金 ---- */
+  --color-void: #000000;
+  --color-abyss: #060a14;
+  --color-cosmos: #0b1428;
+  --color-cosmos-2: #101c36;
+  --color-deep-blue: #16294a;
+  --color-ice: #9eb6d9;
+  --color-mist: #e6ecf7;
+  --color-gold: #c9a86a;
+  --color-gold-dim: #8a7148;
+  --color-gold-soft: rgba(201, 168, 106, 0.18);
+
+  /* ---- 初始态：纯白底 / 纯黑字 ---- */
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #3d3d3d;
+  --color-ink-mute: #6b6b6b;
+  --color-paper: #ffffff;
+
+  /* ---- 基础字号（提升至 16px 基准） ---- */
+  --text-base: 1rem;
+
+  /* ============================================================
+   *  v5.0 · 弹性字号刻度
+   *
+   *  所有主要文字尺寸改用 clamp()，
+   *  在 1280px ~ 1920px 之间平滑伸缩：
+   *  · 窄屏自动收窄，不会把内容挤出屏幕
+   *  · 宽屏自动放大，保持「字大」的观感
+   *  · 因为带 vw 单位，字号与版面始终成比例 —— 不会重叠
+   * ============================================================ */
+  --fs-hero: clamp(3.5rem, 7.2vw, 8.5rem); /* 首页主标题 */
+  --fs-page: clamp(2.5rem, 4.6vw, 5.25rem); /* 页面级标题 */
+  --fs-sub: clamp(1.75rem, 2.6vw, 3rem); /* 副标题 / 卡片主标题 */
+  --fs-lead: clamp(1.25rem, 1.55vw, 1.95rem); /* 引导段 */
+  --fs-body: clamp(1.0625rem, 1.12vw, 1.45rem); /* 正文 */
+  --fs-label: clamp(0.8125rem, 0.78vw, 1rem); /* 眉题 / 标签 */
+}
+
+/* ============================================================
+ *  v5.0 · 全局单屏锁定（Zero-Scroll Viewport）
+ *
+ *  设计原则：
+ *  1. html / body / #root 三层全部锁死高度，overflow:hidden，
+ *     从物理上杜绝原生滚动条。
+ *  2. 页面内部若内容装不下，由「内容区」自己滚动，
+ *     而不是让整个页面滚。
+ *  3. 排版尺度全部改用 flex + gap 自适应，
+ *     不再依赖死板的绝对像素 margin/padding。
+ * ============================================================ */
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  transition:
+    background-color 1.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- 单屏布局工具类 ---- */
+
+/* 垂直堆叠：页头（固定） + 主体（弹性，撑满剩余空间） */
+.screen-col {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 主体区域：吃掉所有剩余高度，永不溢出 */
+.screen-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 主体区域内部可滚动（长表单 / 长说明用） */
+.screen-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 页头 / 页脚：不参与伸缩 */
+.screen-fixed {
+  flex: 0 0 auto;
+}
+
+/* ============================================================
+ *  主题态（结果态）
+ *  初始态 = 纯白底纯黑字；结果态 = 宇宙暗色 + 元素环境光
+ * ============================================================ */
+
+[data-theme='cosmos'] body,
+[data-theme='cosmos'] {
+  background: var(--color-abyss);
+  color: var(--color-mist);
+}
+
+::selection {
+  background: rgba(201, 168, 106, 0.24);
+  color: #fff;
+}
+
+/* ---- 元素主题变量（由 JS 注入到 <html> 上） ---- */
+:root {
+  --el-primary: #0a0a0a;
+  --el-primary-soft: rgba(10, 10, 10, 0.08);
+  --el-glow: rgba(10, 10, 10, 0.18);
+  --el-ink: #0a0a0a;
+  --el-ink-soft: rgba(10, 10, 10, 0.68);
+  --el-ink-mute: rgba(10, 10, 10, 0.4);
+  --el-ambient: rgba(10, 10, 10, 0.05);
+  --el-ambient-2: rgba(10, 10, 10, 0.05);
+  --el-ambient-3: rgba(10, 10, 10, 0.05);
+  --el-line: rgba(10, 10, 10, 0.2);
+  --el-secondary: #3d3d3d;
+  --el-soft: rgba(10, 10, 10, 0.1);
+  /* v9.0：核心标题用的独立强调色 */
+  --el-accent: #0a0a0a;
+  --el-accent-2: #3d3d3d;
+}
+
+[data-theme='cosmos'] {
+  --el-primary: #c9a86a;
+  --el-primary-soft: rgba(201, 168, 106, 0.16);
+  --el-glow: rgba(201, 168, 106, 0.28);
+  --el-ink: #e6ecf7;
+  --el-ink-soft: rgba(230, 236, 247, 0.68);
+  --el-ink-mute: rgba(230, 236, 247, 0.40);
+  --el-ambient: rgba(201, 168, 106, 0.16);
+  --el-ambient-2: rgba(16, 28, 54, 0.5);
+  --el-ambient-3: rgba(16, 28, 54, 0.5);
+  --el-line: rgba(201, 168, 106, 0.24);
+}
+
+/* ============================================================
+ *  v9.0 · 任务 3 —— 元素主题的 CSS 增强
+ *
+ *  「卡片边框、光影必须随元素变化」——
+ *  这里用 CSS 变量驱动边框与阴影，
+ *  主题一换，整页的卡片质感立刻跟着变。
+ * ============================================================ */
+
+[data-theme='cosmos'] {
+  /* 卡片边框：随元素主色微微着色 */
+  --card-border: color-mix(in srgb, var(--el-primary) 26%, transparent);
+  /* 卡片内发光：顶部一道极淡的元素色 */
+  --card-inner-glow: color-mix(in srgb, var(--el-primary) 12%, transparent);
+  /* 卡片外阴影：带一点元素色，而不是死黑 */
+  --card-shadow: 0 22px 60px rgba(0, 0, 0, 0.58),
+    0 0 46px color-mix(in srgb, var(--el-primary) 12%, transparent);
+}
+
+/* 元素主题下的卡片边框 —— 跟随 --card-border */
+[data-theme='cosmos'] .element-card {
+  border-color: var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+/* 强调色工具类 */
+.accent-text {
+  color: var(--el-accent);
+  text-shadow: 0 0 26px color-mix(in srgb, var(--el-accent) 55%, transparent);
+}
+
+/* ---- 毛玻璃面板：全透明高透，绝不发灰（v4.0） ---- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 更通透的一档：用于弹窗 / 抽屉，让纯黑底与星空完全透出 */
+.glass-panel-soft {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ---- 衬线排版工具类 ----
+ *
+ * v5.0：行高与字距全面收紧。
+ * 旧版 .serif-body 用 line-height 2.1 + tracking 0.14em，
+ * 配合 30~48px 的大字号时会撑出巨大的行盒，
+ * 导致标题与副标题的视觉基线互相重叠。
+ * 现在改为：紧凑行高 + 收敛字距，靠 gap 而不是行高来分隔。
+ */
+.serif-body {
+  font-family: var(--font-serif);
+  line-height: 1.62;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.serif-title {
+  font-family: var(--font-display);
+  line-height: 1.12;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+
+/* 眉题 / 标签：小字号 + 宽字距（保持可读性，不参与大标题的紧凑逻辑） */
+.eyebrow {
+  font-family: var(--font-sans);
+  line-height: 1.2;
+  letter-spacing: 0.42em;
+  font-weight: 700;
+}
+
+/* ============================================================
+ *  弹性排版工具类（v5.0）
+ *
+ *  配合上面的 clamp() 字号刻度使用。
+ *  每一类都自带紧凑行高，杜绝行盒互相挤压。
+ * ============================================================ */
+.t-hero {
+  font-size: var(--fs-hero);
+  line-height: 1.04;
+  letter-spacing: 0.16em;
+  font-weight: 600;
+}
+
+.t-page {
+  font-size: var(--fs-page);
+  line-height: 1.08;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+
+.t-sub {
+  font-size: var(--fs-sub);
+  line-height: 1.16;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.t-lead {
+  font-size: var(--fs-lead);
+  line-height: 1.55;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.t-body {
+  font-size: var(--fs-body);
+  line-height: 1.68;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+.t-label {
+  font-size: var(--fs-label);
+  line-height: 1.25;
+  letter-spacing: 0.32em;
+  font-weight: 700;
+}
+
+/* ============================================================
+ *  天赋矩阵 · 2×2 网格（v12.0 · 任务 2）
+ * ============================================================
+ *
+ *  目标是**绝对对称的 2×2**：
+ *   · 宽屏 → 两列两行，四张卡同排等高
+ *   · 窄屏 → 单列纵向堆叠（不挤成一团）
+ *
+ *  实现要点：
+ *   1. grid-auto-rows: 1fr  —— 每一行的行高取该行最高卡的高度，
+ *      于是同一排的两张卡**绝对等高**。
+ *   2. grid-template-columns: repeat(2, minmax(0, 1fr))
+ *      —— minmax(0,1fr) 而不是 1fr：
+ *      1fr 的最小尺寸是 auto（内容宽度），
+ *      长句会把列撑破；minmax(0,1fr) 允许收缩，长文本才会正常换行。
+ *   3. 卡片 h-full + flex-col —— 内容顶部对齐，练习一句用 mt-auto 推到底部，
+ *      四张卡的「练习」行落在同一水平线上。
+ * ============================================================ */
+[data-talent-grid] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 1.75rem;
+}
+
+/* 窄屏退化为单列 */
+@media (max-width: 767px) {
+  [data-talent-grid] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    gap: 1.25rem;
+  }
+}
+
+/* 卡片本身 —— 等高 + 内部弹性布局 */
+[data-talent-card] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 320px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 卡片的元素色顶边 —— 四张卡用四种深浅，矩阵看起来不呆板 */
+[data-talent-card]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  width: 42px;
+  background: var(--el-primary);
+  opacity: 0.85;
+}
+
+/* 单行截断（卡片标题 / 标签等固定高度场景） */
+.t-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.t-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.t-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gold-text {
+  color: var(--color-gold);
+}
+
+/* ---- 元素主题高亮文字 ---- */
+.el-text {
+  color: var(--el-primary);
+}
+
+.el-line {
+  background: var(--el-line);
+}
+
+/* ---- 初始态（白底黑字）---- */
+[data-theme='paper'] .glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+[data-theme='paper'] .el-text {
+  color: var(--el-primary);
+}
+
+/* ---- 输入框底线微光 ---- */
+.underline-glow {
+  position: relative;
+}
+.underline-glow::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--el-primary),
+    var(--el-ink-mute),
+    transparent
+  );
+  opacity: 0.55;
+  transition: opacity 0.6s ease;
+}
+.underline-glow:focus-within::after {
+  opacity: 1;
+}
+
+/* ---- 滚动字幕遮罩 ---- */
+.fade-edges {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 18%,
+    #000 82%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 18%,
+    #000 82%,
+    transparent 100%
+  );
+}
+
+/* ---- 细滚动条 ---- */
+.thin-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--el-line);
+  border-radius: 3px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+.float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+
+/* 环绕卡片的浮动动画。
+   单独使用一个类名，避免与 Tailwind 的 translate 组合类冲突
+   （animation 的 transform 优先级高于普通 class）。 */
+@keyframes orbit-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.orbit-float {
+  animation: orbit-float 8s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.04);
+  }
+}
+
+.breathe {
+  animation: breathe 9s ease-in-out infinite;
+}
+
+/* ============================================================
+ *  v6.0 · 极光漂移动画
+ *  三条光幕以不同周期、方向缓慢漂移，制造「宇宙在呼吸」的纵深。
+ * ============================================================ */
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, 4%, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-4%, 7%, 0) scale(0.95);
+  }
+}
+
+@keyframes aurora-drift-2 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.04);
+  }
+  40% {
+    transform: translate3d(-7%, 6%, 0) scale(0.94);
+  }
+  75% {
+    transform: translate3d(3%, -5%, 0) scale(1.1);
+  }
+}
+
+@keyframes aurora-drift-3 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.96);
+  }
+  50% {
+    transform: translate3d(8%, -6%, 0) scale(1.1);
+  }
+}
+
+/* ============================================================
+ *  v6.0 · 卡片浮动动画（错落感）
+ *  每张卡片配不同的 animation-delay，制造高低错落的悬浮感。
+ *
+ *  v7.0：主页改为 translateZ 的立体环绕后，
+ *  浮动改由 Framer Motion 内联驱动（每张卡片周期/延迟都不同），
+ *  这里只保留给其它页面用的轻量版本。
+ * ============================================================ */
+@keyframes float-card {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-11px);
+  }
+}
+
+.float-card {
+  animation: float-card 9s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ============================================================
+ *  v7.0 · 3D 立体宇宙容器
+ *
+ *  主页的主体现用 perspective 建立 Z 轴，
+ *  卡片通过 translateZ 获得真实的近大远小。
+ *  这里提供公共类，便于其它模块复用。
+ * ============================================================ */
+.universe-3d {
+  perspective: 1500px;
+  perspective-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* 3D 翻牌容器 —— 塔罗抽牌用 */
+.flip-3d {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.flip-3d-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+.flip-3d-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flip-3d-back {
+  transform: rotateY(0deg);
+}
+
+.flip-3d-front {
+  transform: rotateY(180deg);
+}
+
+.flip-3d-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-slow,
+  .orbit-float,
+  .breathe,
+  .float-card {
+    animation: none;
+  }
+  [class*='aurora-drift'] {
+    animation: none !important;
+  }
+  .flip-3d-inner {
+    transition-duration: 0.01ms;
+  }
+}
