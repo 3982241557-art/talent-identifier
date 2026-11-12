@@ -1,0 +1,26 @@
+node_modules
+server/node_modules
+dist
+.vercel
+.git
+.vscode
+.idea
+.DS_Store
+*.log
+
+# 独立项目与开发产物（不参与构建）
+ai-learning-platform
+screenshots
+docs
+
+# 根目录设计稿（仅本地留存）—— 注意不能忽略 public/ 与 src/assets/ 下的图片
+/*.png
+/.shots-intro.png
+
+# 密钥
+.env
+.env.*
+server/.env
+server/.env.*
+!.env.example
+!server/.env.example
