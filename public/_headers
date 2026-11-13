@@ -1,0 +1,19 @@
+/*
+  Cloudflare Pages 响应头（v15.2）
+  放置于 public/_headers —— Vite 构建时原样拷入 dist/。
+*/
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.png
+  Cache-Control: public, max-age=604800
+
+/
+  Cache-Control: no-cache

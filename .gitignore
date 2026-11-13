@@ -53,3 +53,10 @@ screenshots/
 # 根目录的设计稿 / 参考图（仅本地留存）
 /*.png
 /.shots-intro.png
+
+# Cloudflare Pages 本地开发密钥（仅本机，绝不入库）
+.dev.vars
+.dev.vars.*
+
+# Wrangler 本地构建产物
+.wrangler

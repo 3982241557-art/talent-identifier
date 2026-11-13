@@ -1,140 +1,178 @@
-# 部署指南（v15.1 · Git 触发式部署）
+# 部署指南（v15.2 · Cloudflare Pages）
 
-> 目标平台：**Zeabur**（或腾讯云 Webify 等 Node 容器平台）
-> 部署方式：GitHub 仓库 push → 平台自动拉取 → 自动构建 → 自动发布
+> 部署平台：**Cloudflare Pages**（静态资源 + Pages Functions）
+> 部署方式：GitHub 仓库 push → Cloudflare 自动拉取 → 自动构建 → 自动发布
+> 费用：免费额度足够个人项目使用
 
 ---
 
 ## 0. 架构前提（先读这段，能省掉 80% 的排查时间）
 
-本项目是**单进程单端口**应用：
+Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，同一个域名：
 
 ```
-浏览器  ──►  同一个 Express 进程（端口由平台分配）
-              ├── /api/*        → API 路由（12 条）
-              └── /*            → dist/ 静态资源（SPA 兜底）
+浏览器  ──►  https://<你的项目>.pages.dev
+              ├── /api/*  → Pages Function（functions/api/[[path]].js）
+              │              └─ Express 应用逻辑 + DeepSeek + 星历引擎
+              └── /*      → Vite 构建产物（dist/）
 ```
 
-**不是**「前端一个服务 + 后端一个服务」。所以：
-- 不需要 nginx、不需要反向代理、不需要配跨域
-- 前后端天然同源，不存在 CORS 预检问题
+**关键点：**
+- 前后端**同域同源** → 不需要 nginx、不需要反向代理、没有 CORS 预检
+- 一次部署搞定，不需要拆两个项目
 
 ---
 
-## 1. 一次性准备
+## 1. 前置条件
 
-### 1.1 GitHub 授权（CLI 用）
+- GitHub 仓库：`https://github.com/3982241557-art/talent-identifier`（已推送）
+- Cloudflare 账号（免费即可）
+- DeepSeek API Key
 
-```bash
-export PATH="$HOME/.npm-global/bin:$PATH"
-gh auth login
-```
+---
 
-选 `GitHub.com` → `HTTPS` → 用浏览器完成授权。
+## 2. 首次部署（浏览器操作）
 
-### 1.2 创建仓库并推送
+### 步骤 1 · 创建项目
 
-```bash
-cd ~/Desktop/Life-Script-Web
-gh repo create talent-identifier --private --source=. --remote=origin --push
-```
+1. 打开 <https://dash.cloudflare.com> → 登录
+2. 左侧 **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
+3. 选择 **GitHub** → 授权 Cloudflare 访问你的仓库
+   （私有仓库需要先在授权页面勾选 `talent-identifier`）
+4. 选择 **`3982241557-art/talent-identifier`** 仓库 → **Begin setup**
 
-> `--private` 建议先私有，验证通过后再改成公开。
-> 公开仓库任何人 clone 都能看到源码（不含密钥，密钥已被 `.gitignore` 排除）。
+### 步骤 2 · 填写构建设置
 
-### 1.3 在 Zeabur 控制台配置环境变量（**关键**）
+| 字段 | 填写内容 |
+|---|---|
+| Project name | `talent-identifier` |
+| **Framework preset** | `None` |
+| **Build command** | `npm run build` |
+| **Build output directory** | `dist` |
+| Root directory | 留空（仓库根目录） |
+| Environment variables | 留空（下一步单独配） |
 
-`server/.env` **不会**随代码上传（已被 `.gitignore` 排除）。必须手动配置：
+> **Build command 说明**
+> 仓库的 `package.json` 里 `build` 脚本是：
+> ```
+> node scripts/build-corpus.mjs && tsc -b && vite build
+> ```
+> 第一步会把语料库 JSON 编译成静态 ESM 模块（Workers 运行时无法读文件系统）。
+> **不要**简化成 `vite build`，否则 Workers 端会因缺模块而报错。
 
-| 变量名 | 值 | 说明 |
+### 步骤 3 · 配置环境变量（**必做**）
+
+进入项目 → **Settings** → **Environment variables** → **Add variable**：
+
+| Variable name | Value | Type |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | `sk-...` | **必填**，你的 DeepSeek 密钥 |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | 可选，默认值即可 |
-| `DEEPSEEK_MODEL` | `deepseek-chat` | 可选，默认值即可 |
+| `DEEPSEEK_API_KEY` | `sk-你的真实密钥` | **Secret**（加密） |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Text |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | Text |
 
-`PORT` 由平台自动注入，**不要**手动设置。
+> ⚠️ **`DEEPSEEK_API_KEY` 必须选 `Secret` 类型**，不要用 `Plain text`。
+> Secret 类型在 Cloudflare 后端加密存储，日志和控制台都不会明文显示。
+>
+> ⚠️ `server/.env` **不会**随代码上传（已被 `.gitignore` 排除），
+> 所有密钥必须在控制台配置。这是刻意的安全设计。
 
-配置路径：Zeabur 项目 → Service → **Variables** → 添加变量。
+### 步骤 4 · 部署
 
----
+点 **Save and Deploy**。首次构建约 1-2 分钟（要装依赖 + 跑 TypeScript 检查）。
 
-## 2. 平台侧配置
+构建成功后控制台会显示你的域名：
 
-### 方式 A：Zeabur（推荐，零 Dockerfile 负担）
+```
+https://talent-identifier.pages.dev
+```
 
-1. 打开 <https://zeabur.com> → 新建项目
-2. **Deploy New Service** → **GitHub**，选 `talent-identifier` 仓库
-3. **检测到 `zeabur.yaml` 会自动识别**，无需手填命令：
-   - Build: `npm install && npm run build`
-   - Start: `npm start`
-4. 添加环境变量 `DEEPSEEK_API_KEY`
-5. 点 Deploy → 完成后在 **Domains** 里绑定域名
+### 步骤 5 · 绑定自定义域名（可选）
 
-### 方式 B：腾讯云 Webify
-
-- 源码仓库 → 选 GitHub 仓库
-- 构建命令：`npm install && npm run build`
-- 启动命令：`npm start`
-- 环境变量：同 1.3
-
-### 方式 C：Docker（任何平台）
-
-仓库已含 `Dockerfile`（多阶段构建），平台识别 Dockerfile 即可。
+**Workers & Pages** → 你的项目 → **Custom domains** → **Set up a custom domain**
+→ 填入你的域名，按提示加 CNAME 记录。
 
 ---
 
 ## 3. 部署后验证
 
 ```bash
-# 替换成你的域名
-DOMAIN="https://talent-identifier-xxxx.zeabur.app"
+DOMAIN="https://talent-identifier.pages.dev"
 
 # 1. 页面可访问
-curl -sI "$DOMAIN" | head -1          # 期望 HTTP/2 200
+curl -sI "$DOMAIN" | head -1                    # 期望 HTTP/2 200
 
-# 2. API 正常
-curl -s "$DOMAIN/api/health"          # 期望 {"ok":true,"configured":true,"placeholder":false}
+# 2. API 正常，且密钥已生效
+curl -s "$DOMAIN/api/health"
+# 期望 {"ok":true,"configured":true,"placeholder":false,...}
 
 # 3. 真实星历可用
 curl -s -X POST "$DOMAIN/api/chart" \
   -H 'Content-Type: application/json' \
   -d '{"date":"1995-06-15","time":"12:00","latitude":30.27,"longitude":120.15,"timezone":8}'
-# 期望 {"source":"swiss-ephemeris","engine":"sweph 2.10.03",...}
+# 期望 {"source":"astronomy-engine","planets":[...],"ascendant":174.019,...}
 
-# 4. 前端路由兜底
-curl -sI "$DOMAIN/dashboard" | head -1 # 期望 200（不是 404）
+# 4. 未知 API 返回 JSON 而不是 HTML
+curl -s "$DOMAIN/api/nope" -X POST -H 'Content-Type: application/json' -d '{}'
+# 期望 {"error":"接口不存在。","path":"/api/nope"}
 ```
 
 **四个都过 = 部署成功。**
 
 ---
 
-## 4. 常见故障速查
+## 4. 本地复现（可选）
 
-| 现象 | 原因 | 处理 |
-|---|---|---|
-| 访问域名 404，页面打不开 | 静态资源没托管 | 确认 `server/app.mjs` 的 `express.static` 与 SPA 兜底存在 |
-| `/api/health` 返回 `placeholder: true` | 环境变量没配 | 在平台 Variables 里加 `DEEPSEEK_API_KEY` |
-| `/api/health` 返回 404 JSON | 路由前缀被改写 | 确认用 `npm start` 而非 serverless 部署 |
-| 构建时报 `sweph` 编译错误 | 原生模块 | 平台选 Node 22；Docker 走多阶段构建 |
-| 刷新页面 404 | 缺 SPA 兜底 | 确认 `app.mjs` 末尾的 `app.use` 兜底中间件在 |
-| AI 功能 503 | Key 格式错 | 必须是 `sk-` 开头、16 位以上 |
+仓库自带完整的本地验证脚本，**不需要**部署就能确认一切正常：
+
+```bash
+npm install
+npm run build
+
+# 单元级验证：12 条路由 + 星历精度 + 语料一致性 + 输入校验
+npm run verify:workers
+
+# 部署级模拟：完整复刻 Pages 运行时（静态资源 + Functions 路由）
+npm run simulate:pages
+
+# 真实 Cloudflare 运行时（workerd）
+npm run cf:dev
+```
+
+> `npm run cf:dev` 需要本地密钥。先创建 `.dev.vars`：
+> ```
+> DEEPSEEK_API_KEY="sk-你的真实密钥"
+> ```
+> `.dev.vars` 已在 `.gitignore` 中，不会入库。
 
 ---
 
-## 5. 安全提醒
+## 5. 常见故障速查
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 页面 404 | Build output directory 填错 | 必须是 `dist` |
+| 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
+| `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
+| `/api/health` 返回 `placeholder: true` | 环境变量没配或没选 Secret | 控制台检查 `DEEPSEEK_API_KEY` |
+| `/api/xxx` 返回一坨 HTML | `_routes.json` 被改动 | 必须是 `include: ["/api/*"], exclude: []` |
+| AI 功能 503 | Key 格式错误 | 必须是 `sk-` 开头、16 位以上 |
+| 修改代码后线上没变 | 提交没推上去 | `git push` 后 Cloudflare 自动重新部署 |
+
+---
+
+## 6. 安全提醒
 
 ⚠️ **部署到公网后，任何拿到链接的人都能消耗你的 DeepSeek 额度。**
 
 建议：
-1. Zeabur 控制台开启 **Rate Limiting**（每 IP 限制请求频率）
-2. 域名**不要**公开到搜索引擎（Zeabur 默认不收录，但请勿主动提交）
-3. 定期检查 DeepSeek 控制台的用量
-4. 怀疑被滥用时，直接轮换 Key 并重启服务
+1. Cloudflare Pages 免费版自带基础防护；如需更强，可在 **Settings → Functions → Runtime** 调整
+2. 不要把仓库改公开（保持 private）
+3. 定期检查 DeepSeek 控制台用量
+4. 怀疑被滥用时，直接在 Cloudflare 控制台改掉 `DEEPSEEK_API_KEY` 并重新部署
 
 ---
 
-## 6. 后续发版
+## 7. 后续发版
 
 ```bash
 cd ~/Desktop/Life-Script-Web
@@ -143,6 +181,6 @@ git commit -m "feat: 你的改动描述"
 git push
 ```
 
-→ Zeabur 自动检测到 push → 自动重新构建部署 → 几十秒后线上更新。
+→ Cloudflare 自动检测到 push → 自动重新构建部署 → 约 1-2 分钟后线上更新。
 
 **无需手动触发部署。**

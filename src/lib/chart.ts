@@ -287,7 +287,11 @@ function computeLocalChart(
 
   const sunLon = planetaryLongitude('sun', jdUT).lon
   const moonLon = planetaryLongitude('moon', jdUT).lon
-  const risingLon = risingLongitude(jdLocal, input.longitude, input.latitude)
+  /*
+   * v15.2：上升点必须用**世界时**儒略日。
+   * 旧版误传 jdLocal（本地时），偏差可达 100° 以上。
+   */
+  const risingLon = risingLongitude(jdUT, input.longitude, input.latitude)
 
   const sunSign = signOf(sunLon)
   const moonSign = signOf(moonLon)

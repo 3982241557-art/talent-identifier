@@ -1,0 +1,42 @@
+# ============================================================
+#  Cloudflare Pages 配置（v15.2）
+# ============================================================
+#
+#  【架构】
+#  Cloudflare Pages = 静态资源 + Pages Functions（Workers 运行时）
+#
+#    · 静态资源  → Vite 构建产物（dist/）
+#    · Functions  → functions/api/[[path].js]
+#      捕获 /api/* 的全部请求，转发到 Express 应用逻辑
+#
+#  同一个域名、一次部署，前后端天然同源 —— 无跨域、无预检。
+#
+#  【重要：Functions 与静态资源的优先级】
+#  Pages 的 Functions 只在 **functions/ 目录**存在时启用。
+#  路由优先级：Functions > 静态资源 > SPA 兜底。
+#  所以 /api/* 一定先进 Functions，其余路径才落到静态资源。
+#
+#  【环境变量】
+#  在 Cloudflare 控制台配置（不要写进代码）：
+#    DEEPSEEK_API_KEY  —— 必填
+#    DEEPSEEK_BASE_URL —— 可选，默认 https://api.deepseek.com
+#    DEEPSEEK_MODEL    —— 可选，默认 deepseek-chat
+# ============================================================
+
+name = "talent-identifier"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+# 保持与 package.json 的 build 脚本一致
+# （控制台若已填写 Build command，此处仅作为兜底）
+[build]
+command = "npm run build"
+
+# 变量声明 —— 实际值在控制台填写，这里只声明类型与是否加密
+[vars]
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+# 注意：DEEPSEEK_API_KEY 是敏感信息，
+# 请在 Cloudflare 控制台的 Settings → Environment variables 里
+# 添加为 **Secret**（加密类型），不要写进本文件的 [vars]。
