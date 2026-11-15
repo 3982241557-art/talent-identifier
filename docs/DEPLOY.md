@@ -43,10 +43,22 @@ Pages 的发布流程随即失败。
 ```toml
 name = "talent-identifier"
 pages_build_output_dir = "./dist"
-
-[build]
-command = "npm run build"
 ```
+
+> ⚠️ **绝对不要在 wrangler.toml 里写 `[build]` 段！**
+>
+> Pages 项目的 wrangler **不支持** `[build]`，一旦出现就会：
+>
+> ```
+> [ERROR] Running configuration file validation for Pages:
+>         - Configuration file for Pages projects does not support "build"
+> [WARNING] ... missing the "pages_build_output_dir" field...
+>           Ignoring configuration file for now.
+> [ERROR] Missing Pages project name.
+> ```
+>
+> 报错极具误导性 —— 它说「缺少 pages_build_output_dir」，
+> 但那个字段明明就在文件里。真相是**整个配置文件被丢弃了**。
 
 控制台对应设置：
 
@@ -88,14 +100,23 @@ command = "npm run build"
 | **Framework preset** | `None` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
-| **Deploy command** | **留空**（Pages 自动发布 dist/） |
+| **Deploy command** | `node scripts/deploy-stub.mjs`（或留空） |
 | Root directory | 留空（仓库根目录） |
 | **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
 
-> **Deploy command 请留空。**
-> Pages 会自动发布 Build output directory，不需要 wrangler 参与。
-> 若误填 `npx wrangler deploy`（Workers 命令），Cloudflare 会直接拒绝。
+> **Deploy command**
+>
+> 最省事是**留空** —— Pages 会自动发布 Build output directory。
+>
+> 若界面不允许清空，填 `node scripts/deploy-stub.mjs`：
+> 它做一次幂等的发布前置校验然后 exit 0，
+> 真正的上传仍由 Cloudflare 内部完成 —— **不需要任何 API token**。
+>
+> ❌ **不要**填 `npx wrangler deploy`（Workers 命令，Cloudflare 会直接拒绝）
+> ❌ **不要**填 `npx wrangler pages deploy dist`（需要 CLOUDFLARE_API_TOKEN，
+>    而 Git 集成的构建环境不会注入它 —— 官方默认注入的变量只有
+>    `CI` / `CF_PAGES` / `CF_PAGES_COMMIT_SHA` / `CF_PAGES_BRANCH` / `CF_PAGES_URL`）
 
 > **Build command 说明**
 > 仓库的 `package.json` 里 `build` 脚本是：
