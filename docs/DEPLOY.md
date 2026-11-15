@@ -55,10 +55,15 @@ Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，�
 > **Build command 说明**
 > 仓库的 `package.json` 里 `build` 脚本是：
 > ```
-> node scripts/build-corpus.mjs && tsc -b && vite build
+> node scripts/cloud-build.mjs
 > ```
-> 第一步会把语料库 JSON 编译成静态 ESM 模块（Workers 运行时无法读文件系统）。
-> **不要**简化成 `vite build`，否则 Workers 端会因缺模块而报错。
+> 它是**自愈式**构建器 —— 会自动检测并补装缺失的 devDependencies，
+> 检查各处配置是否一致，最后校验产物是否真的生成。
+>
+> 详见下方「专项：Missing entry-point」章节。
+>
+> **不要**简化成 `vite build` —— 那样会跳过语料库模块生成，
+> Workers 端会因缺模块而报错。
 
 ### 步骤 3 · 配置环境变量（**必做**）
 
@@ -128,6 +133,9 @@ curl -s "$DOMAIN/api/nope" -X POST -H 'Content-Type: application/json' -d '{}'
 npm install
 npm run build
 
+# 部署配置一致性检查（17 项）
+npm run check:config
+
 # 单元级验证：12 条路由 + 星历精度 + 语料一致性 + 输入校验
 npm run verify:workers
 
@@ -150,6 +158,7 @@ npm run cf:dev
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| **Missing entry-point to Worker script or to assets directory** | **构建阶段失败，dist/ 没生成** | 见下方专项说明 |
 | 页面 404 | Build output directory 填错 | 必须是 `dist` |
 | 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
 | `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
@@ -157,6 +166,76 @@ npm run cf:dev
 | `/api/xxx` 返回一坨 HTML | `_routes.json` 被改动 | 必须是 `include: ["/api/*"], exclude: []` |
 | AI 功能 503 | Key 格式错误 | 必须是 `sk-` 开头、16 位以上 |
 | 修改代码后线上没变 | 提交没推上去 | `git push` 后 Cloudflare 自动重新部署 |
+
+---
+
+## 5.5 专项：Missing entry-point to Worker script or to assets directory
+
+> 这条报错极具迷惑性 —— 它说「找不到入口或资源目录」，
+> 但**根因几乎总在构建阶段**，跟入口文件本身无关。
+
+### 真实根因
+
+Cloudflare Pages 的构建环境默认设置 `NODE_ENV=production`：
+
+```
+NODE_ENV=production
+      ↓
+npm install / npm ci 跳过 devDependencies
+      ↓
+typescript 与 vite 没装上（node_modules/.bin/tsc 不存在）
+      ↓
+sh: tsc: command not found
+      ↓
+vite build 从未执行
+      ↓
+dist/ 目录根本没生成
+      ↓
+Cloudflare 找不到 assets directory
+      ↓
+[ERROR] Missing entry-point to Worker script or to assets directory
+```
+
+### 本仓库的应对（已内置）
+
+`package.json` 的 build 脚本是自愈式的：
+
+```json
+"build": "node scripts/cloud-build.mjs"
+```
+
+`scripts/cloud-build.mjs` 会：
+
+1. 检查 `tsc` / `vite` 是否可用
+2. **缺失则自动 `npm install --include=dev` 补装**（`--include=dev` 会无视 NODE_ENV）
+3. 跑 `scripts/check-config.mjs` 校验各处配置是否互相对得上
+4. 生成语料库静态模块 → 类型检查 → Vite 构建
+5. **校验 `dist/index.html` 真的产出**，不产出直接以非 0 退出码失败
+
+所以无论控制台的 Build command 填
+`npm run build`、`npm ci && npm run build` 还是别的组合，
+都能走到同一条可靠路径。
+
+### 三处输出目录必须一致
+
+| 位置 | 配置项 | 值 |
+|---|---|---|
+| `vite.config.ts` | `build.outDir` | `'dist'` |
+| `wrangler.toml` | `pages_build_output_dir` | `"./dist"` |
+| Cloudflare 控制台 | Build output directory | `dist` |
+
+仓库里的 `npm run check:config` 会一次性校验这三处（外加 14 项其他配置）。
+
+### 如果仍然失败
+
+打开 Cloudflare 的 **Build logs**，找第一处 `ERROR`（不要看最后一条）：
+
+- 出现 `tsc: command not found` → devDependencies 没装上，
+  把控制台的 Build command 改成 `npm install --include=dev && npm run build`
+- 出现 `Cannot find module '.../archetypes_corpus.data.mjs'` → 构建命令被简化了，
+  必须用完整的 `npm run build`
+- 出现 `Functions build failed` → 看 Functions 目录，
+  `functions/api/[[path]].js` 必须存在
 
 ---
 
