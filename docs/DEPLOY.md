@@ -50,6 +50,7 @@ Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，�
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
 | Root directory | 留空（仓库根目录） |
+| **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
 
 > **Build command 说明**
@@ -74,6 +75,12 @@ Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，�
 | `DEEPSEEK_API_KEY` | `sk-你的真实密钥` | **Secret**（加密） |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Text |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Text |
+
+> **Node 版本**
+> 仓库已包含 `.node-version`（22.12.0）与 `.nvmrc`（22），
+> Cloudflare 会自动读取并使用 Node 22。
+> `wrangler` 与 `vite 8` 都硬性要求 Node ≥ 22.12.0，
+> 若平台默认用了 Node 18/20，构建会在第一步就失败。
 
 > ⚠️ **`DEEPSEEK_API_KEY` 必须选 `Secret` 类型**，不要用 `Plain text`。
 > Secret 类型在 Cloudflare 后端加密存储，日志和控制台都不会明文显示。
