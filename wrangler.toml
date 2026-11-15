@@ -1,88 +1,74 @@
 # ============================================================
-#  Cloudflare 部署配置（v15.4）
+#  Cloudflare Pages 配置（v15.5 · 纯 Pages 形态）
 # ============================================================
 #
 #  ============================================================
-#  v15.4 · 从 Pages 切换到 Workers（Assets）
-#  ============================================================
-#
-#  【为什么换】
-#  之前按 Pages 部署（Build output directory = dist，
-#  Deploy command = wrangler pages deploy dist），
-#  但控制台的 Deploy command 填的是 `npx wrangler deploy` ——
-#  那是 **Workers** 的发布命令，不是 Pages 的。
-#
-#  结果：构建四步全绿（dist/ 已生成），
-#  但发布阶段 Workers 找不到 Worker 入口脚本（缺 main）
-#  也没有静态资源绑定（缺 [assets]），
-#  于是报 "Missing entry-point to Worker script or to assets directory"。
-#
-#  【本文件采用的方案：Workers + Assets】
-#  Workers 的静态资源能力（Workers Assets）与 Pages 等价，
-#  但发布路径是 `wrangler deploy`，与控制台的 Deploy command 完全一致 ——
-#  不用改控制台，改代码就行。
-#
-#  【架构】
-#    浏览器 ──► https://talent-identifier.<子域>.workers.dev
-#                ├── /api/*  → Worker（functions/_lib/api-handler.js）
-#                └── /*      → 静态资源（dist/，走 [assets]）
-#
-#  前后端同域同源，无需跨域配置。
-#
-#  【main 指向什么】
-#  main 必须是**打包后的 Worker 脚本**（单个 JS 文件），
-#  不是 functions/ 目录 —— Workers 不像 Pages 会自动扫描目录。
-#  所以构建流程里用 `wrangler pages functions build` 把
-#  functions/ 打成单文件，再由 [assets] 绑定 dist/。
+#  v15.5 · 关键决策：彻底回到纯 Pages 形态
 # ============================================================
+#
+#  【v15.4 为什么失败】
+#  v15.4 我把配置改成了 Workers 形态（main + [assets]），
+#  因为控制台的 Deploy command 填的是 `npx wrangler deploy`。
+#
+#  但用户部署的是 **Pages 项目**。
+#  而 wrangler 会看到 toml 里有 `main` 与 `[assets]`，
+#  就把它当成 **Workers 配置**来解析 —— 于是 Pages 项目用 Workers 配置发布，
+#  必然失败。
+#
+#  【v15.5 的决定】
+#  与其让配置迁就控制台那行错误的 Deploy command，
+#  不如让**配置迁就平台**。
+#
+#  Cloudflare Pages 的 Git 集成**根本不需要 Deploy command**：
+#    · Build command      → 构建静态资源
+#    · Build output dir   → Pages 自动发布这个目录
+#    · Deploy command     → **留空即可**（Pages 不走 wrangler）
+#
+#  留空 Deploy command 后，Pages 会：
+#    1. 用 `functions/` 目录自动生成 Pages Functions 路由
+#    2. 把 Build output directory 当作静态资源发布
+#    3. 两者在同一个域名下共存
+#
+#  这样连 wrangler.toml 都不需要参与 Pages 的发布流程 ——
+#  但我仍然保留它，因为：
+#    · `wrangler pages dev` 本地开发要用
+#    · `wrangler pages functions build` 验证 Functions 能否打包
+#    · 它记录了 pages_build_output_dir，是唯一的配置真相源
+#
+#  【所以控制台应该这样填】
+#    Build command        : npm run build
+#    Build output directory : dist
+#    Deploy command       : （留空 / 清空 / 删除这一行）
+#
+#  ============================================================
 
 name = "talent-identifier"
 
 # ------------------------------------------------------------
-#  Worker 入口
+#  Pages 静态资源目录
 # ------------------------------------------------------------
-# `wrangler deploy` 会**自动打包** main 指向的脚本，
-# 并递归解析它的 import（包括 ../server/*.mjs）。
-# 所以这里直接指源码，不必自己预打包。
+# 必须与 vite.config.ts 的 build.outDir 一致。
+# Pages 会把该目录的内容发布为静态资源。
+pages_build_output_dir = "./dist"
+
+# ------------------------------------------------------------
+#  Pages Functions
+# ------------------------------------------------------------
+# functions/ 目录会被 Pages 自动扫描并生成路由：
+#   functions/api/[[path].js  →  捕获 /api/* 的所有请求
 #
-# functions/_worker.js 的职责：
-#   /api/* → api-handler.js
-#   /*     → ASSETS 绑定（dist/）
-main = "functions/_worker.js"
-
+# 辅助文件放在 functions/_lib/（下划线开头），
+# Pages 会忽略它们，不会误建成路由。
+#
+# ⚠️ 不要在 toml 里写 main / [assets] —— 那是 Workers 配置，
+#    混进 Pages 项目会让 wrangler 按 Workers 解析并导致发布失败。
 # ------------------------------------------------------------
-#  Workers 运行时
-# ------------------------------------------------------------
-# ⚠️ 这两个字段必须放在**顶层**（任何 [段] 之前）。
-#    TOML 里一旦出现 [assets]，后面的键就都属于 assets 段了，
-#    写成 [assets] 之后会导致 wrangler 报
-#    "A compatibility_date is required when uploading a Worker"。
-compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-# ------------------------------------------------------------
-#  静态资源（Vite 构建产物）
-# ------------------------------------------------------------
-[assets]
-directory = "./dist"
-# Worker 通过 ASSETS 绑定读取静态资源
-binding = "ASSETS"
-# 未命中的路径回 index.html（SPA 兜底），避免刷新页面 404
-not_found_handling = "single-page-application"
 
 # ------------------------------------------------------------
 #  构建命令
 # ------------------------------------------------------------
-# Cloudflare 控制台的 Build command 应为：
-#   npm run build:worker
-#
-# 它会依次完成：
-#   1. 检查并补装 devDependencies（防 NODE_ENV=production 陷阱）
-#   2. 部署配置一致性检查
-#   3. 生成语料库静态模块
-#   4. TypeScript 类型检查
-#   5. Vite 构建 → dist/
-#   6. 打包 Worker → .wrangler/worker-build/index.js
+# 与 package.json 的 build 脚本一致。
+# 控制台的 Build command 填同样的内容即可。
 [build]
 command = "npm run build"
 
@@ -93,7 +79,7 @@ command = "npm run build"
 #  wrangler.toml 的 [vars] 会与 Cloudflare 控制台的环境变量合并覆盖，
 #  两边同时存在会让密钥来源分裂、极难排查。
 #  唯一真相源 = Cloudflare 控制台
-#  → Settings → Variables and Secrets
+#  → Settings → Environment variables
 #
 #  必填（Secret 类型）：
 #    DEEPSEEK_API_KEY

@@ -87,10 +87,32 @@ let pagesOutDir = null
     const isWorkersMode = main !== null && assetsDir !== null
 
     check('wrangler.toml 存在', true)
+
+    /*
+     * v15.5：项目形态必须是 Pages。
+     *
+     * Cloudflare 的判定逻辑：
+     *   toml 里有 main + [assets] → 当成 Workers 项目
+     *   只有 pages_build_output_dir → 当成 Pages 项目
+     *
+     * 如果在 Pages 项目里带了 Workers 字段，
+     * 或者反过来用 `wrangler deploy`（Workers 命令），
+     * Cloudflare 会直接拒绝：
+     *   "It looks like you've run a Workers-specific command in a Pages project.
+     *    For Pages, please run `wrangler pages deploy` instead."
+     *
+     * 所以这里**只允许 Pages 形态**，出现 Workers 字段即判定失败。
+     */
     check(
-      'wrangler.toml 声明了静态资源目录（Pages 或 Workers 形态）',
-      isPagesMode || isWorkersMode,
-      '两种形态都没有 —— Cloudflare 找不到 assets directory，必然报 Missing entry-point',
+      'wrangler.toml 是纯 Pages 形态（有 pages_build_output_dir）',
+      isPagesMode,
+      '缺少 pages_build_output_dir —— Pages 找不到静态资源目录',
+    )
+
+    check(
+      'wrangler.toml 不含 Workers 专用字段（main / [assets]）',
+      !isWorkersMode,
+      '带有 main 或 [assets] → Cloudflare 会按 Workers 项目解析，导致 Pages 发布失败',
     )
 
     if (isPagesMode) {
