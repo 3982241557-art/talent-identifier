@@ -273,7 +273,52 @@ let pagesOutDir = null
   }
 }
 
-/* ---------- 4.6 · 无 Vercel 等废弃平台残留 ---------- */
+/* ---------- 4.6 · 部署脚本必须真正上传 ---------- */
+{
+  /*
+   * v15.7 教训：
+   * v15.5 的 deploy-stub 只做校验然后 exit 0，
+   * Cloudflare 判定「发布成功」→ 状态显示绿色 Ready，
+   * 但**一个字节都没上传** ——
+   * 线上一直是创建项目时的 Hello World 模板。
+   *
+   * 症状极具迷惑性：绿色 Ready + 空白 body。
+   * 这里加一道防线：部署脚本必须真的调用 wrangler deploy。
+   */
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
+  const deployScript = pkg.scripts?.deploy ?? ''
+  check(
+    `package.json 的 deploy 脚本 = "${deployScript}"`,
+    deployScript.includes('scripts/deploy.mjs'),
+    '部署脚本应指向 scripts/deploy.mjs —— 它会真正执行 wrangler deploy',
+  )
+
+  const deployFile = resolve(root, 'scripts', 'deploy.mjs')
+  if (existsSync(deployFile)) {
+    const src = readFileSync(deployFile, 'utf-8')
+    check(
+      'scripts/deploy.mjs 真的调用了 wrangler deploy',
+      /wrangler['\s,]+deploy/.test(src),
+      '未调用 wrangler deploy → Cloudflare 只会显示绿色 Ready，但什么都没上传',
+    )
+    check(
+      'scripts/deploy.mjs 部署后验证了线上响应',
+      src.includes('Hello world'),
+      '应检测线上是否仍返回模板 Worker 的 "Hello world"',
+    )
+  } else {
+    check('scripts/deploy.mjs 存在', false, '缺失 —— 无法保证部署真的上传了内容')
+  }
+
+  /* 旧的 stub 必须已被移除 */
+  check(
+    'scripts/deploy-stub.mjs 已移除（它只 exit 0，不会真的发布）',
+    !existsSync(resolve(root, 'scripts', 'deploy-stub.mjs')),
+    'deploy-stub 会让 Cloudflare 显示绿色 Ready，但实际什么都没上传',
+  )
+}
+
+/* ---------- 4.7 · 无 Vercel 等废弃平台残留 ---------- */
 {
   const serverPkg = resolve(root, 'server', 'package.json')
   if (existsSync(serverPkg)) {
@@ -297,7 +342,7 @@ let pagesOutDir = null
   )
 }
 
-/* ---------- 4.7 · Functions 依赖链不含 Node 内置模块 ---------- */
+/* ---------- 4.8 · Functions 依赖链不含 Node 内置模块 ---------- */
 {
   /*
    * Workers 运行时没有 node:fs / node:path 等内置模块。

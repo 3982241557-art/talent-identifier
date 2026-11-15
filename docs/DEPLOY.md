@@ -115,19 +115,33 @@ TOML 里一旦出现 `[assets]`，后面的键就都属于 assets 段了。
 | **Framework preset** | `None` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
-| **Deploy command** | `npx wrangler deploy` |
+| **Deploy command** | `node scripts/deploy.mjs` |
 | Root directory | 留空（仓库根目录） |
 | **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
 
-> **Deploy command**：`npx wrangler deploy`
+> **Deploy command**：`node scripts/deploy.mjs`
 >
-> Worker 形态下必须用 wrangler 发布。
-> Git 集成的构建环境**不会**注入 `CLOUDFLARE_API_TOKEN`
-> （官方默认注入的只有 `CI` / `CF_PAGES` / `CF_PAGES_COMMIT_SHA` /
-> `CF_PAGES_BRANCH` / `CF_PAGES_URL`），
-> 但 Cloudflare 的 Workers Builds 流程会自行注入发布凭据 ——
-> 这正是本项目部署成功的原因。
+> 这个脚本会真正执行 `npx wrangler deploy`（上传 Worker + 静态资源），
+> 并在部署后**主动请求线上地址验证**：
+>
+> ```
+> [deploy] ✓ 入口就位：functions/_worker.js
+> [deploy] ✓ index.html 含挂载点与资源引用（9 个条目，390.6 KB）
+> [deploy] 发布到 Cloudflare：npx wrangler deploy
+> [deploy] 线上地址：https://talent-identifier.<账户ID>.workers.dev
+> [deploy] ✓ 线上首页已返回我们的 index.html（946 字节）
+> [deploy] ✓ /api/health 正常响应
+> ```
+>
+> ⚠️ **绝对不要用「只校验就 exit 0」的占位脚本**
+> （v15.5 的 deploy-stub 就是这么错的）：
+> Cloudflare 看到 exit 0 就显示**绿色 Ready**，
+> 但实际上**一个字节都没上传**，
+> 线上一直保持着创建项目时的 **Hello World 模板**。
+>
+> 症状：构建全绿、状态 Ready，但页面空白、
+> 且**所有路径**（`/`、`/api/health`、`/anything`）返回同样的 11 字节 "Hello world"。
 >
 > ❌ **不要**填 `npx wrangler pages deploy dist`（那是 Pages 的 Direct Upload 流程，需要 token）
 
@@ -245,6 +259,7 @@ npm run cf:dev
 |---|---|---|
 | **Missing entry-point to Worker script or to assets directory** | **构建阶段失败，dist/ 没生成** | 见下方专项说明 |
 | **run a Workers-specific command in a Pages project** | Deploy command 填了 `npx wrangler deploy` | **改成留空**，或 `npx wrangler pages deploy dist` |
+| **绿色 Ready 但页面空白，所有路径返回 "Hello world"** | Deploy command 只做校验就 exit 0，实际没上传 | 填 `node scripts/deploy.mjs` |
 | 页面 404 | Build output directory 填错 | 必须是 `dist` |
 | 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
 | `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
