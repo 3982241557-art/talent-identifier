@@ -344,6 +344,13 @@ let pagesOutDir = null
       src.includes('Hello world'),
       '应检测线上是否仍返回模板 Worker 的 "Hello world"',
     )
+
+    check(
+      'scripts/deploy.mjs 打印了当前 commit（用于确认部署的是最新版本）',
+      src.includes('git rev-parse'),
+      '应打印 commit 号 —— 改完 Deploy command 后 Cloudflare 常会用旧 commit 重发布，' +
+        '报 "Cannot find module" 但文件其实早已 push',
+    )
   } else {
     check('scripts/deploy.mjs 存在', false, '缺失 —— 无法保证部署真的上传了内容')
   }
@@ -394,6 +401,13 @@ let pagesOutDir = null
       'scripts/deploy.mjs 部署后验证了线上响应',
       src.includes('Hello world'),
       '应检测线上是否仍返回模板 Worker 的 "Hello world"',
+    )
+
+    check(
+      'scripts/deploy.mjs 打印了当前 commit（用于确认部署的是最新版本）',
+      src.includes('git rev-parse'),
+      '应打印 commit 号 —— 改完 Deploy command 后 Cloudflare 常会用旧 commit 重发布，' +
+        '报 "Cannot find module" 但文件其实早已 push',
     )
   } else {
     check('scripts/deploy.mjs 存在', false, '缺失 —— 无法保证部署真的上传了内容')

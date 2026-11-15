@@ -40,7 +40,7 @@
  *  同时保留部署后验证：检测线上是否仍是 Hello World 模板。
  * ============================================================ */
 
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -63,6 +63,31 @@ console.log(`[deploy] 当前工作目录：${process.cwd()}`)
 if (process.cwd() !== root) {
   console.log('[deploy] （cwd 与仓库根不同 —— 将用 --cwd 显式指定）')
 }
+
+/*
+ * 打印当前 commit —— 用来一眼确认「这次部署用的是哪个版本」。
+ *
+ * v15.9 教训：改完 Deploy command 后 Cloudflare 常常会
+ * **用同一个旧 commit 重新发布**，而不是拉取最新代码。
+ * 于是报 "Cannot find module '/opt/buildhome/repo/scripts/deploy.mjs'
+ * —— 明明文件早就 push 过了。
+ *
+ * 有了这行 commit 号，对照 GitHub 的提交历史，
+ * 一眼就能看出部署的是不是最新版本。
+ */
+const gitSha = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+  } catch {
+    return '(未知)'
+  }
+})()
+console.log(`[deploy] 当前 commit：${gitSha}`)
 
 /* ============================================================
  *  工具
