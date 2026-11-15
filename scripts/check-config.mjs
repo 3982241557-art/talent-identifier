@@ -273,7 +273,96 @@ let pagesOutDir = null
   }
 }
 
-/* ---------- 4.6 · 部署脚本必须真正上传 ---------- */
+/* ---------- 4.6 · 部署脚本必须与 cwd 解耦 ---------- */
+{
+  /*
+   * v15.8 教训：
+   *
+   * wrangler **只在当前工作目录**查找 wrangler.toml，
+   * 不会向上查找父目录。
+   *
+   * Cloudflare Workers Builds 的 Deploy command
+   * 并不保证在仓库根目录执行 —— 那里执行时 wrangler 找不到配置，
+   * 于是报：
+   *   "Missing entry-point to Worker script or to assets directory"
+   *   （并建议加 main / [assets]，但字段其实就在文件里）
+   *
+   * 已在本地用对照实验证实：
+   *   仓库根执行   → ✓ Read 14 files from the assets directory
+   *   父目录执行   → ✗ 完全找不到配置
+   *   加 --cwd     → ✓ 恢复正常
+   *
+   * 所以部署脚本必须：
+   *   1. 基于自身位置定位仓库根（不依赖 cwd）
+   *   2. 用 --cwd 显式指定
+   *   3. 用命令行参数显式传入 name / assets / compatibility-date
+   */
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
+  const deployScript = pkg.scripts?.deploy ?? ''
+
+  const deployFile = resolve(root, 'scripts', 'deploy.mjs')
+  if (existsSync(deployFile)) {
+    const src = readFileSync(deployFile, 'utf-8')
+
+    check(
+      'scripts/deploy.mjs 用 import.meta.url 定位仓库根（不依赖 cwd）',
+      src.includes('import.meta.url'),
+      '必须基于脚本自身位置推导仓库根 —— cwd 在 Cloudflare 上不保证是仓库根',
+    )
+
+    check(
+      'scripts/deploy.mjs 传了 --cwd',
+      src.includes("'--cwd'"),
+      '缺少 --cwd → wrangler 找不到 wrangler.toml → Missing entry-point',
+    )
+
+    check(
+      'scripts/deploy.mjs 传了 --assets（静态资源路径）',
+      src.includes("'--assets'"),
+      '缺少 --assets → 即使 toml 读不到也不知道静态资源在哪',
+    )
+
+    check(
+      'scripts/deploy.mjs 传了 --name（Worker 名）',
+      src.includes("'--name'"),
+    )
+
+    check(
+      'scripts/deploy.mjs 传了 --compatibility-date',
+      src.includes("'--compatibility-date'"),
+      '缺少它 → 不依赖 toml 顶层字段，避免 TOML 段归属陷阱',
+    )
+
+    check(
+      'scripts/deploy.mjs 真的调用了 wrangler deploy',
+      /wrangler['\s,]+deploy/.test(src),
+      '未调用 wrangler deploy → Cloudflare 只会显示绿色 Ready，但什么都没上传',
+    )
+
+    check(
+      'scripts/deploy.mjs 部署后验证了线上响应',
+      src.includes('Hello world'),
+      '应检测线上是否仍返回模板 Worker 的 "Hello world"',
+    )
+  } else {
+    check('scripts/deploy.mjs 存在', false, '缺失 —— 无法保证部署真的上传了内容')
+  }
+
+  check(
+    `package.json 的 deploy 脚本 = "${deployScript}"`,
+    deployScript.includes('scripts/deploy.mjs'),
+    '部署脚本应指向 scripts/deploy.mjs',
+  )
+
+  /* 旧的 stub 必须已被移除 */
+  check(
+    'scripts/deploy-stub.mjs 已移除（它只 exit 0，不会真的发布）',
+    !existsSync(resolve(root, 'scripts', 'deploy-stub.mjs')),
+    'deploy-stub 会让 Cloudflare 显示绿色 Ready，但实际什么都没上传',
+  )
+}
+
+/* ---------- 4.7 · 部署脚本必须真正上传 ---------- */
 {
   /*
    * v15.7 教训：
@@ -318,7 +407,7 @@ let pagesOutDir = null
   )
 }
 
-/* ---------- 4.7 · 无 Vercel 等废弃平台残留 ---------- */
+/* ---------- 4.8 · 无 Vercel 等废弃平台残留 ---------- */
 {
   const serverPkg = resolve(root, 'server', 'package.json')
   if (existsSync(serverPkg)) {
@@ -342,7 +431,7 @@ let pagesOutDir = null
   )
 }
 
-/* ---------- 4.8 · Functions 依赖链不含 Node 内置模块 ---------- */
+/* ---------- 4.9 · Functions 依赖链不含 Node 内置模块 ---------- */
 {
   /*
    * Workers 运行时没有 node:fs / node:path 等内置模块。

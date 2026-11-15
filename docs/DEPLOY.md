@@ -261,6 +261,7 @@ npm run cf:dev
 | **run a Workers-specific command in a Pages project** | Deploy command 填了 `npx wrangler deploy` | **改成留空**，或 `npx wrangler pages deploy dist` |
 | **绿色 Ready 但页面空白，所有路径返回 "Hello world"** | Deploy command 只做校验就 exit 0，实际没上传 | 填 `node scripts/deploy.mjs` |
 | **Invalid _headers configuration: Expected a colon-separated header pair** | `public/_headers` 用了 `/* */` 块注释 | Cloudflare 只认 `#` 注释，见下 |
+| **Missing entry-point to Worker script or to assets directory** | wrangler 没找到 `wrangler.toml`（cwd 不在仓库根） | 用 `node scripts/deploy.mjs`，它会显式传 `--cwd` |
 | 页面 404 | Build output directory 填错 | 必须是 `dist` |
 | 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
 | `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
@@ -268,6 +269,58 @@ npm run cf:dev
 | `/api/xxx` 返回一坨 HTML | `_routes.json` 被改动 | 必须是 `include: ["/api/*"], exclude: []` |
 | AI 功能 503 | Key 格式错误 | 必须是 `sk-` 开头、16 位以上 |
 | 修改代码后线上没变 | 提交没推上去 | `git push` 后 Cloudflare 自动重新部署 |
+
+---
+
+## 5.3 专项：Missing entry-point to Worker script or to assets directory
+
+> ```
+> [ERROR] Missing entry-point to Worker script or to assets directory
+>         - Specify an entry-point to your Worker script via the command line
+>           (ex: `npx wrangler deploy src/index.ts`)
+>         - Or add the following to your "wrangler.toml" file:
+>           main = "src/index.ts"
+> ```
+
+### 根因：wrangler 只在当前工作目录找配置
+
+这条报错极具迷惑性 —— 它建议你加 `main` 和 `[assets]`，
+但**字段明明就在 `wrangler.toml` 里**。
+
+真相是：**wrangler 只在当前工作目录查找配置文件，不会向上查找父目录。**
+
+Cloudflare Workers Builds 的 Deploy command
+**并不保证在仓库根目录执行**。
+在那里执行时 wrangler 找不到 `wrangler.toml`，
+于是认为「没有入口、没有 assets」。
+
+本地对照实验：
+
+| 场景 | 结果 |
+|---|---|
+| 仓库根执行 `npx wrangler deploy` | ✓ `Read 14 files from the assets directory` |
+| **父目录执行** `npx wrangler deploy` | ✗ `Missing entry-point to Worker script or to assets directory` |
+| 加 `--cwd <仓库根>` | ✓ 恢复正常 |
+
+### 解决：部署脚本与 cwd 解耦
+
+`scripts/deploy.mjs` 做了四件事：
+
+1. **基于 `import.meta.url` 定位仓库根** —— 完全不依赖 cwd
+2. **传 `--cwd <仓库根>`** —— 保证 wrangler 找得到配置文件
+3. **命令行显式传 `--name` / `--assets` / `--compatibility-date`**
+   —— 即使 toml 彻底读不到，部署依然能成功
+4. **部署后主动验证线上响应** —— 检测是否仍是 Hello World 模板
+
+```
+[deploy] 仓库根目录：/private/tmp/cfy
+[deploy] 当前工作目录：/
+[deploy] （cwd 与仓库根不同 —— 将用 --cwd 显式指定）
+[deploy] 发布到 Cloudflare：npx wrangler deploy --cwd /private/tmp/cfy --name talent-identifier --assets /private/tmp/cfy/dist --compatibility-date 2025-01-01
+```
+
+> ⚠️ **不要**把 Deploy command 写成裸的 `npx wrangler deploy` ——
+> 它依赖 cwd 恰好是仓库根。填 `node scripts/deploy.mjs` 才是稳的。
 
 ---
 

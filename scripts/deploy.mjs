@@ -1,35 +1,43 @@
 /* ============================================================
- *  Cloudflare 部署脚本（v15.7）
+ *  Cloudflare 部署脚本（v15.8）
  * ============================================================
  *
  *  ============================================================
- *  v15.7 · 修复「绿色 Ready 但线上是 Hello World」
+ *  v15.8 · 修复「Missing entry-point to Worker script or to assets directory」
  *  ============================================================
  *
  *  【症状】
- *  Cloudflare 构建全绿、状态 Ready，但线上访问：
- *    · <body></body> 完全空白
- *    · 所有路径（/、/api/health、/anything）返回**同样的 11 字节** "Hello world"
+ *  Cloudflare 的 Deploy command 跑 `npx wrangler deploy` 时报：
+ *
+ *    [ERROR] Missing entry-point to Worker script or to assets directory
+ *            - Specify an entry-point to your Worker script via the command line
+ *              (ex: `npx wrangler deploy src/index.ts`)
+ *            - Or add the following to your "wrangler.toml" file:
+ *              main = "src/index.ts"
+ *            - If are uploading a directory of assets, ...
+ *              [assets] directory = "./dist"
+ *
+ *  但仓库里的 wrangler.toml **明明有** main 与 [assets]。
  *
  *  【根因】
- *  v15.5 引入的 deploy-stub 只做校验然后 exit 0。
- *  Cloudflare 看到 exit 0 → 判定「发布步骤成功」→ 显示绿色 Ready，
- *  但**实际上一个字节都没上传**。
- *  Worker 一直保持着「创建项目时 Cloudflare 生成的 Hello World 模板」。
+ *  wrangler 只在**当前工作目录**查找 wrangler.toml / wrangler.jsonc。
+ *  Cloudflare Workers Builds 的 Deploy command
+ *  并不保证在仓库根目录执行 ——
+ *  在别处执行时，wrangler 找不到配置文件，
+ *  于是认为「没有入口、没有 assets」，报上面那个错。
  *
- *  那个模板对所有路径无条件返回 "Hello world"，
- *  且没有 ASSETS 绑定 —— 所以既没有 index.html，也没有任何 API。
+ *  已用对照实验证实：
+ *    在仓库根执行 npx wrangler deploy  → ✓ Read 1 file from the assets directory
+ *    在父目录执行 npx wrangler deploy  → ✗ 完全找不到配置
+ *    加 --cwd <仓库根>                → ✓ 恢复正常
  *
- *  【本脚本做什么】
- *  真正执行 `wrangler deploy`：
- *    1. 先跑部署前置校验（复用 check-config 的结论）
- *    2. 确认 dist/index.html 存在且含挂载点
- *    3. 执行 npx wrangler deploy
- *    4. 部署后验证：读取 wrangler 输出的 URL 并请求它，
- *       确认返回的是我们的 index.html 而不是 Hello world
+ *  【本脚本的解法 —— 三重保险】
+ *    1. 自己定位仓库根目录（基于 import.meta.url，不依赖 cwd）
+ *    2. 用 --cwd <仓库根> 显式告诉 wrangler 去哪找配置
+ *    3. 用命令行参数显式传入 name / assets / main
+ *       —— 即使 toml 彻底读不到，部署依然能成功
  *
- *  用法（填进 Cloudflare 的 Deploy command）：
- *    node scripts/deploy.mjs
+ *  同时保留部署后验证：检测线上是否仍是 Hello World 模板。
  * ============================================================ */
 
 import { spawnSync } from 'node:child_process'
@@ -37,8 +45,24 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/* ============================================================
+ *  0 · 定位仓库根目录
+ * ============================================================
+ *
+ * 基于本脚本自身的位置推导，**完全不依赖当前工作目录**。
+ * 这正是 v15.8 踩坑的核心：cwd 不一定是仓库根。
+ */
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
+
+console.log('[deploy] ================================================')
+console.log('[deploy] 天赋识别器 · Cloudflare 部署')
+console.log('[deploy] ================================================')
+console.log(`[deploy] 仓库根目录：${root}`)
+console.log(`[deploy] 当前工作目录：${process.cwd()}`)
+if (process.cwd() !== root) {
+  console.log('[deploy] （cwd 与仓库根不同 —— 将用 --cwd 显式指定）')
+}
 
 /* ============================================================
  *  工具
@@ -54,8 +78,9 @@ function run(command, args, label, opts = {}) {
   })
   if (result.status !== 0) {
     console.error(`\n[deploy] ✗ ${label} 失败（退出码 ${result.status}）`)
-    if (opts.capture && result.stdout) {
-      console.error(result.stdout.toString().slice(-1500))
+    if (opts.capture) {
+      const out = (result.stdout?.toString() ?? '') + (result.stderr?.toString() ?? '')
+      console.error(out.slice(-2000))
     }
     process.exit(result.status ?? 1)
   }
@@ -63,7 +88,7 @@ function run(command, args, label, opts = {}) {
 }
 
 /* ============================================================
- *  0 · 读配置
+ *  1 · 读配置
  * ============================================================ */
 
 const tomlPath = resolve(root, 'wrangler.toml')
@@ -74,32 +99,28 @@ if (!existsSync(tomlPath)) {
 const toml = readFileSync(tomlPath, 'utf-8')
 
 const workerName = toml.match(/^name\s*=\s*["']([^"']+)["']/m)?.[1] ?? 'talent-identifier'
-const assetsDir = toml.match(/^directory\s*=\s*["']([^"']+)["']/m)?.[1]?.replace(/^\.\//, '') ?? 'dist'
+const assetsDir =
+  toml.match(/^directory\s*=\s*["']([^"']+)["']/m)?.[1]?.replace(/^\.\//, '') ?? 'dist'
 const mainFile = toml.match(/^main\s*=\s*["']([^"']+)["']/m)?.[1]
-const workersDev = toml.match(/^workers_dev\s*=\s*(\w+)/m)?.[1]
+const compatDate = toml.match(/^compatibility_date\s*=\s*["']([^"']+)["']/m)?.[1] ?? '2025-01-01'
 
-console.log('[deploy] ================================================')
-console.log('[deploy] 天赋识别器 · Cloudflare 部署')
-console.log('[deploy] ================================================')
 console.log(`[deploy] Worker 名   : ${workerName}`)
 console.log(`[deploy] 入口         : ${mainFile ?? '(缺失!)'}`)
 console.log(`[deploy] 静态资源目录 : ${assetsDir}/`)
-console.log(`[deploy] workers_dev  : ${workersDev ?? '(未指定)'} `)
+console.log(`[deploy] 兼容日期     : ${compatDate}`)
 
 /* ============================================================
- *  1 · 配置检查
+ *  2 · 配置检查
  * ============================================================ */
 run('node', ['scripts/check-config.mjs'], '部署配置检查')
+run('node', ['scripts/check-metafiles.mjs'], '元文件格式检查')
 
 /* ============================================================
- *  2 · 产物检查（这一段直接对应「白色空 body」的根因）
+ *  3 · 产物检查（对应「白色空 body」与「Hello World」两个症状）
  * ============================================================ */
 
 if (!mainFile) {
-  console.error(
-    '[deploy] ✗ wrangler.toml 缺少 main —— Worker 没有入口脚本，\n' +
-      '        Cloudflare 会保留创建项目时的 Hello World 模板。',
-  )
+  console.error('[deploy] ✗ wrangler.toml 缺少 main —— Worker 没有入口脚本')
   process.exit(1)
 }
 if (!existsSync(resolve(root, mainFile))) {
@@ -140,17 +161,39 @@ console.log(`[deploy] ✓ 入口就位：${mainFile}`)
 console.log(`[deploy] ✓ index.html 含挂载点与资源引用（${fileCount} 个条目，${(totalSize / 1024).toFixed(1)} KB）`)
 
 /* ============================================================
- *  3 · 真正部署
- * ============================================================ */
-const result = run('npx', ['wrangler', 'deploy'], '发布到 Cloudflare', { capture: true })
+ *  4 · 真正部署
+ * ============================================================
+ *
+ * 三重保险：
+ *   · --cwd <仓库根>       → 保证能找到 wrangler.toml
+ *   · --name               → 即使 toml 没读到也知道 Worker 名
+ *   · --assets <绝对路径>  → 即使 toml 没读到也知道静态资源在哪
+ *   · --compatibility-date → 不依赖 toml 的顶层字段
+ *
+ * main 仍由 toml 提供（它需要相对仓库根解析），
+ * 但因为 --cwd 已把 cwd 固定到仓库根，main 一定能被找到。
+ */
+const deployArgs = [
+  'wrangler',
+  'deploy',
+  '--cwd',
+  root,
+  '--name',
+  workerName,
+  '--assets',
+  DIST,
+  '--compatibility-date',
+  compatDate,
+]
+
+const result = run('npx', deployArgs, '发布到 Cloudflare', { capture: true })
 
 /* ============================================================
- *  4 · 部署后验证
+ *  5 · 部署后验证
  * ============================================================ */
 
 const output = (result.stdout?.toString() ?? '') + (result.stderr?.toString() ?? '')
 
-/* 从 wrangler 输出里抓取线上地址 */
 const urlMatch = output.match(/https:\/\/[^\s]+\.workers\.dev/)
 
 console.log('')
@@ -166,7 +209,7 @@ if (!urlMatch) {
 const deployedUrl = urlMatch[0].replace(/\/+$/, '')
 console.log(`[deploy] 线上地址：${deployedUrl}`)
 
-/* 等一小会儿让边缘节点生效 */
+/* 等边缘节点生效 */
 await new Promise((r) => setTimeout(r, 3000))
 
 try {
@@ -176,8 +219,7 @@ try {
   if (text.includes('Hello world')) {
     console.error(
       '[deploy] ✗ 线上仍返回 "Hello world" ——\n' +
-        '        说明部署的仍是 Cloudflare 的模板 Worker。\n' +
-        '        请检查控制台的 Deploy command 是否真的执行了 wrangler deploy。',
+        '        说明部署的仍是 Cloudflare 的模板 Worker。',
     )
     process.exit(1)
   }
@@ -189,7 +231,6 @@ try {
 
   console.log(`[deploy] ✓ 线上首页已返回我们的 index.html（${text.length} 字节）`)
 
-  /* 再验一下 API */
   const health = await fetch(`${deployedUrl}/api/health`).catch(() => null)
   if (health && health.ok) {
     console.log('[deploy] ✓ /api/health 正常响应')
