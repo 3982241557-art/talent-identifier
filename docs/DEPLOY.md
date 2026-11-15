@@ -1,6 +1,10 @@
-# 部署指南（v15.5 · Cloudflare Pages）
+# 部署指南（v15.6 · Cloudflare Workers + Assets）
 
-> 部署平台：**Cloudflare Pages**（静态资源 + Pages Functions）
+> 部署平台：**Cloudflare Workers**（静态资源 + Worker 脚本）
+>
+> ⚠️ v15.6 起本项目使用 Workers 形态 —— Cloudflare 正在把 Pages
+> 项目**自动迁移**到 Workers 平台，实测本项目的线上域名已经是
+> `<worker名>.<账户ID>.workers.dev`（Pages 域名 DNS 根本不存在）。
 > 部署方式：GitHub 仓库 push → Cloudflare 自动拉取 → 自动构建 → 自动发布
 > 费用：免费额度足够个人项目使用
 
@@ -42,23 +46,34 @@ Pages 的发布流程随即失败。
 
 ```toml
 name = "talent-identifier"
-pages_build_output_dir = "./dist"
+main = "functions/_worker.js"
+workers_dev = true
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 ```
 
-> ⚠️ **绝对不要在 wrangler.toml 里写 `[build]` 段！**
->
-> Pages 项目的 wrangler **不支持** `[build]`，一旦出现就会：
->
-> ```
-> [ERROR] Running configuration file validation for Pages:
->         - Configuration file for Pages projects does not support "build"
-> [WARNING] ... missing the "pages_build_output_dir" field...
->           Ignoring configuration file for now.
-> [ERROR] Missing Pages project name.
-> ```
->
-> 报错极具误导性 —— 它说「缺少 pages_build_output_dir」，
-> 但那个字段明明就在文件里。真相是**整个配置文件被丢弃了**。
+### ⚠️ workers_dev = true 是关键
+
+Worker **默认不启用** workers.dev 路由，于是控制台显示
+"workers.dev Disabled" / "No URLs enabled"，
+线上访问返回 `HTTP 404` + `error code: 1042`。
+
+显式设成 `true` 后，**每次部署都会自动开启该路由**，
+不用再去控制台手动点 Enable。
+
+> 若已经手动点过 Enable，仍建议保留这一行 ——
+> 否则将来某次部署可能被路由设置覆盖回去。
+
+### ⚠️ compatibility_date 必须在顶层
+
+TOML 里一旦出现 `[assets]`，后面的键就都属于 assets 段了。
+把 `compatibility_date` 写在 `[assets]` 之后会导致 wrangler 报
+`A compatibility_date is required when uploading a Worker`。
 
 控制台对应设置：
 
@@ -100,23 +115,21 @@ pages_build_output_dir = "./dist"
 | **Framework preset** | `None` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
-| **Deploy command** | `node scripts/deploy-stub.mjs`（或留空） |
+| **Deploy command** | `npx wrangler deploy` |
 | Root directory | 留空（仓库根目录） |
 | **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
 
-> **Deploy command**
+> **Deploy command**：`npx wrangler deploy`
 >
-> 最省事是**留空** —— Pages 会自动发布 Build output directory。
+> Worker 形态下必须用 wrangler 发布。
+> Git 集成的构建环境**不会**注入 `CLOUDFLARE_API_TOKEN`
+> （官方默认注入的只有 `CI` / `CF_PAGES` / `CF_PAGES_COMMIT_SHA` /
+> `CF_PAGES_BRANCH` / `CF_PAGES_URL`），
+> 但 Cloudflare 的 Workers Builds 流程会自行注入发布凭据 ——
+> 这正是本项目部署成功的原因。
 >
-> 若界面不允许清空，填 `node scripts/deploy-stub.mjs`：
-> 它做一次幂等的发布前置校验然后 exit 0，
-> 真正的上传仍由 Cloudflare 内部完成 —— **不需要任何 API token**。
->
-> ❌ **不要**填 `npx wrangler deploy`（Workers 命令，Cloudflare 会直接拒绝）
-> ❌ **不要**填 `npx wrangler pages deploy dist`（需要 CLOUDFLARE_API_TOKEN，
->    而 Git 集成的构建环境不会注入它 —— 官方默认注入的变量只有
->    `CI` / `CF_PAGES` / `CF_PAGES_COMMIT_SHA` / `CF_PAGES_BRANCH` / `CF_PAGES_URL`）
+> ❌ **不要**填 `npx wrangler pages deploy dist`（那是 Pages 的 Direct Upload 流程，需要 token）
 
 > **Build command 说明**
 > 仓库的 `package.json` 里 `build` 脚本是：
@@ -160,7 +173,7 @@ pages_build_output_dir = "./dist"
 构建成功后控制台会显示你的域名：
 
 ```
-https://talent-identifier.pages.dev
+https://talent-identifier.<你的账户ID>.workers.dev
 ```
 
 ### 步骤 5 · 绑定自定义域名（可选）

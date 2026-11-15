@@ -89,30 +89,32 @@ let pagesOutDir = null
     check('wrangler.toml 存在', true)
 
     /*
-     * v15.5：项目形态必须是 Pages。
+     * v15.6：项目已被 Cloudflare 迁移到 Workers 平台
+     * （Pages 正在被自动统一到 Workers）。
      *
-     * Cloudflare 的判定逻辑：
-     *   toml 里有 main + [assets] → 当成 Workers 项目
-     *   只有 pages_build_output_dir → 当成 Pages 项目
+     * 判定依据（线上实测）：
+     *   · 域名是 <worker名>.<账户ID>.workers.dev —— Worker 的命名规则
+     *   · <项目名>.pages.dev 的 DNS 不存在 —— Pages 域名从未生效
+     *   · 控制台有 "workers.dev Disabled" 开关 —— 只有 Worker 才有
      *
-     * 如果在 Pages 项目里带了 Workers 字段，
-     * 或者反过来用 `wrangler deploy`（Workers 命令），
-     * Cloudflare 会直接拒绝：
-     *   "It looks like you've run a Workers-specific command in a Pages project.
-     *    For Pages, please run `wrangler pages deploy` instead."
+     * 所以这里**只允许 Worker 形态**：
+     *   main      → Worker 入口
+     *   [assets]  → 静态资源绑定
      *
-     * 所以这里**只允许 Pages 形态**，出现 Workers 字段即判定失败。
+     * 两种形态不能混用：
+     *   · Pages 项目里带 Workers 字段 → wrangler 按 Workers 解析 → 发布失败
+     *   · Worker 项目里用 pages_build_output_dir → 缺入口 → 报 Missing entry-point
      */
     check(
-      'wrangler.toml 是纯 Pages 形态（有 pages_build_output_dir）',
-      isPagesMode,
-      '缺少 pages_build_output_dir —— Pages 找不到静态资源目录',
+      'wrangler.toml 是 Worker 形态（有 main + [assets]）',
+      isWorkersMode,
+      '项目已迁移到 Workers 平台，必须配 main 与 [assets]，否则报 Missing entry-point',
     )
 
     check(
-      'wrangler.toml 不含 Workers 专用字段（main / [assets]）',
-      !isWorkersMode,
-      '带有 main 或 [assets] → Cloudflare 会按 Workers 项目解析，导致 Pages 发布失败',
+      'wrangler.toml 不含 Pages 专用字段（pages_build_output_dir）',
+      !isPagesMode,
+      'Worker 项目里出现 pages_build_output_dir 会让配置被判为无效',
     )
 
     if (isPagesMode) {
@@ -163,11 +165,19 @@ let pagesOutDir = null
      * 官方原文：Configuration file for Pages projects does not support "build"
      */
     const wranglerHasBuild = /^\s*\[build\]\s*$/m.test(src)
-    check(
-      'wrangler.toml 不含 [build] 段（Pages 项目不支持，会导致整个文件被忽略）',
-      !wranglerHasBuild,
-      'Pages 的 wrangler 会拒绝含 [build] 的配置，并静默忽略整个文件 → 报 Missing Pages project name',
-    )
+    if (isPagesMode) {
+      check(
+        'wrangler.toml 不含 [build] 段（Pages 项目不支持，会导致整个文件被忽略）',
+        !wranglerHasBuild,
+        'Pages 的 wrangler 会拒绝含 [build] 的配置，并静默忽略整个文件 → 报 Missing Pages project name',
+      )
+    } else {
+      check(
+        'wrangler.toml 的 compatibility_date 在顶层（[assets] 之前）',
+        /^compatibility_date\s*=/m.test(src.split(/^\[/m)[0]),
+        '放在 [assets] 之后会被 TOML 归入 assets 段 → 报 compatibility_date is required',
+      )
+    }
 
     /* [vars] 会与控制台环境变量互相覆盖，应由控制台单一管理 */
     const wranglerHasVars = /^\s*\[vars\]/m.test(src)
