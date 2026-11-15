@@ -25,7 +25,8 @@
     "build:local": "node scripts/build-corpus.mjs && tsc -b && vite build",
     "check:config": "node scripts/check-config.mjs",
     "build:cloudflare": "node scripts/cloud-build.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "check:metafiles": "node scripts/check-metafiles.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",

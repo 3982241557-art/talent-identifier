@@ -260,6 +260,7 @@ npm run cf:dev
 | **Missing entry-point to Worker script or to assets directory** | **构建阶段失败，dist/ 没生成** | 见下方专项说明 |
 | **run a Workers-specific command in a Pages project** | Deploy command 填了 `npx wrangler deploy` | **改成留空**，或 `npx wrangler pages deploy dist` |
 | **绿色 Ready 但页面空白，所有路径返回 "Hello world"** | Deploy command 只做校验就 exit 0，实际没上传 | 填 `node scripts/deploy.mjs` |
+| **Invalid _headers configuration: Expected a colon-separated header pair** | `public/_headers` 用了 `/* */` 块注释 | Cloudflare 只认 `#` 注释，见下 |
 | 页面 404 | Build output directory 填错 | 必须是 `dist` |
 | 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
 | `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
@@ -267,6 +268,60 @@ npm run cf:dev
 | `/api/xxx` 返回一坨 HTML | `_routes.json` 被改动 | 必须是 `include: ["/api/*"], exclude: []` |
 | AI 功能 503 | Key 格式错误 | 必须是 `sk-` 开头、16 位以上 |
 | 修改代码后线上没变 | 提交没推上去 | `git push` 后 Cloudflare 自动重新部署 |
+
+---
+
+## 5.4 专项：Invalid _headers configuration
+
+> ```
+> [ERROR] Invalid _headers configuration:
+>         Line 2: Expected a colon-separated header pair
+>         Line 3: Expected a colon-separated header pair [code: 10324]
+> ```
+
+### 根因
+
+Cloudflare 的 `_headers` 解析器**只认 `#` 开头的单行注释**，
+**不支持 C 风格块注释**。
+
+块注释的开头标记会被当成一条 header 规则去解析，
+而它没有冒号分隔的「名: 值」，于是报上面的错。
+
+更隐蔽的是：**被注释掉的那些 header 规则其实从未生效过** ——
+`X-Frame-Options`、`X-Content-Type-Options` 等安全头一直是缺失的。
+
+### 正确格式
+
+```
+# 这是注释（用 #）
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+```
+
+规则结构：
+
+```
+<URL 模式>
+  <Header 名>: <Header 值>
+```
+
+- 注释：`#` 单行
+- URL 模式行：不缩进，以 `/` 或 `https://` 开头
+- header 行：**缩进**，且必须有冒号
+
+> ⚠️ 注意区分：
+> 规则里的 `/*`（匹配所有路径）和 `/assets/*`（通配符）是**合法的 URL 模式**，
+> 不是块注释。真正的块注释特征是**以 `*/` 结尾**。
+
+### 防护
+
+仓库里的 `npm run check:metafiles` 会复刻 Cloudflare 的解析规则做校验，
+并**已在构建流程中自动执行**（`npm run build` 就会跑）。
+格式不对会在构建阶段就红掉，不必等资产都传完才炸。
 
 ---
 

@@ -1,19 +1,31 @@
-/*
-  Cloudflare Pages 响应头（v15.2）
-  放置于 public/_headers —— Vite 构建时原样拷入 dist/。
-*/
+# Cloudflare 静态资源响应头（Workers Static Assets）
+#
+# ⚠️ 格式要点（v15.7 踩坑记录）
+#
+#   这个文件**只认 `#` 开头的单行注释**。
+#   不支持 /* */ 块注释 —— Cloudflare 会把 `/*` 当成一条 header 规则去解析，
+#   于是报 "Invalid _headers configuration: Expected a colon-separated header pair"。
+#
+#   规则结构：
+#     <URL 模式>
+#       <Header 名>: <Header 值>
+#   header 行必须缩进（空格或 Tab 均可）。
 
+# ── 安全响应头（对所有资源生效）──
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
 
+# ── 带内容哈希的构建产物：永久缓存 ──
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# ── 图片资源：一周缓存 ──
 /*.png
   Cache-Control: public, max-age=604800
 
+# ── 首页：不缓存，保证更新即时生效 ──
 /
   Cache-Control: no-cache

@@ -159,6 +159,18 @@ if (missing.length) {
  */
 run('node', ['scripts/check-config.mjs'], '部署配置检查')
 
+/*
+ * 元文件（_headers / _redirects）格式校验。
+ *
+ * 这是 v15.7 部署失败的直接原因：
+ * public/_headers 用了 C 风格块注释，
+ * 而 Cloudflare 只认 # 开头的单行注释，
+ * 于是报 "Invalid _headers configuration: Expected a colon-separated header pair"。
+ *
+ * 必须在构建阶段就拦下来 —— 资产都传上去了才炸，浪费一次部署。
+ */
+run('node', ['scripts/check-metafiles.mjs'], '元文件格式检查')
+
 /* ============================================================
  *  2 · 生成语料库静态模块
  * ============================================================
