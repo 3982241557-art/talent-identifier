@@ -148,6 +148,27 @@ let pagesOutDir = null
       )
     }
 
+    /*
+     * 【v15.5 · 关键陷阱】Pages 项目**不支持 [build] 段**！
+     *
+     * wrangler 遇到不支持的段会**直接忽略整个配置文件**：
+     *   [WARNING] We detected a configuration file... but it is missing the
+     *             "pages_build_output_dir" field... Ignoring configuration file
+     *   [ERROR] Missing Pages project name.
+     *
+     * 报错信息极具误导性 —— 它说「缺少 pages_build_output_dir」，
+     * 但那个字段明明就在文件里。真相是**整个文件被丢弃了**，
+     * 原因就是里面有个 [build] 段。
+     *
+     * 官方原文：Configuration file for Pages projects does not support "build"
+     */
+    const wranglerHasBuild = /^\s*\[build\]\s*$/m.test(src)
+    check(
+      'wrangler.toml 不含 [build] 段（Pages 项目不支持，会导致整个文件被忽略）',
+      !wranglerHasBuild,
+      'Pages 的 wrangler 会拒绝含 [build] 的配置，并静默忽略整个文件 → 报 Missing Pages project name',
+    )
+
     /* [vars] 会与控制台环境变量互相覆盖，应由控制台单一管理 */
     const wranglerHasVars = /^\s*\[vars\]/m.test(src)
     check(
@@ -156,12 +177,14 @@ let pagesOutDir = null
       'wrangler.toml 的 [vars] 会与控制台环境变量合并覆盖，建议移到控制台',
     )
 
-    const cmd = src.match(/command\s*=\s*["']([^"']+)["']/)?.[1]
-    check(
-      `wrangler.toml 的 build.command = "${cmd}"`,
-      Boolean(cmd),
-      '缺少 build.command',
-    )
+    /*
+     *  注意：**不检查 build.command**
+     *
+     *  Pages 的 wrangler 配置文件不支持 [build] 段，
+     *  写了会导致整个文件被忽略（详见上面的说明）。
+     *  构建命令的唯一真相源是 Cloudflare 控制台的 Build command
+     *  与 package.json 的 scripts.build。
+     */
   }
 }
 
