@@ -1,6 +1,6 @@
-# 部署指南（v15.4 · Cloudflare Workers + Assets）
+# 部署指南（v15.5 · Cloudflare Pages）
 
-> 部署平台：**Cloudflare Workers**（静态资源 + Worker 脚本）
+> 部署平台：**Cloudflare Pages**（静态资源 + Pages Functions）
 > 部署方式：GitHub 仓库 push → Cloudflare 自动拉取 → 自动构建 → 自动发布
 > 费用：免费额度足够个人项目使用
 
@@ -21,22 +21,44 @@ Cloudflare Workers + Assets = **一个 Worker 脚本 + 一份静态资源**，�
 - 前后端**同域同源** → 不需要 nginx、不需要反向代理、没有 CORS 预检
 - 一次部署搞定，不需要拆两个项目
 
-### v15.4 · 为什么从 Pages 改成 Workers
+### ⚠️ v15.5 · 关于 Deploy command 的重要说明
 
-控制台的 **Deploy command** 是 `npx wrangler deploy` —— 那是 **Workers** 的发布命令，
-不是 Pages 的（Pages 要用 `wrangler pages deploy dist`）。
+**Pages 项目里，Deploy command 必须留空（或用 `wrangler pages deploy`）。**
 
-按 Pages 配的话，wrangler.toml 里既没有 `main`（Worker 入口），
-也没有 `[assets]`（静态资源绑定），发布阶段必然报：
+Cloudflare 会明确拒绝 Workers 命令：
 
 ```
-[ERROR] Missing entry-point to Worker script or to assets directory
+[ERROR] It looks like you've run a Workers-specific command in a Pages project.
+        For Pages, please run `wrangler pages deploy` instead.
 ```
 
-所以本项目统一走 **Workers + Assets**：
-- `main = "functions/_worker.js"` —— Worker 入口，wrangler 自动打包
-- `[assets] directory = "./dist"` —— 静态资源走边缘缓存
-- 控制台的 Deploy command 保持 `npx wrangler deploy` 即可，**不用改**
+这是平台层面的限制，**无法通过 wrangler.toml 绕过**。
+
+反过来说，**wrangler.toml 里也不能有 `main` / `[assets]`** ——
+那是 Workers 配置，一旦存在，Cloudflare 就会把项目按 Workers 解析，
+Pages 的发布流程随即失败。
+
+所以本项目采用**纯 Pages 形态**：
+
+```toml
+name = "talent-identifier"
+pages_build_output_dir = "./dist"
+
+[build]
+command = "npm run build"
+```
+
+控制台对应设置：
+
+| 字段 | 值 |
+|---|---|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| **Deploy command** | **留空**（或 `npx wrangler pages deploy dist`） |
+
+> **留空是 Cloudflare Pages Git 集成的正规用法** ——
+> Pages 会自动用 Build output directory 发布，不需要任何 API token。
+> 显式写 `wrangler pages deploy` 则需要配置 `CF_API_TOKEN`。
 
 ---
 
@@ -66,14 +88,14 @@ Cloudflare Workers + Assets = **一个 Worker 脚本 + 一份静态资源**，�
 | **Framework preset** | `None` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
-| **Deploy command** | `npx wrangler deploy` |
+| **Deploy command** | **留空**（Pages 自动发布 dist/） |
 | Root directory | 留空（仓库根目录） |
 | **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
 
-> **Deploy command 必须是 `npx wrangler deploy`**（Workers 命令）。
-> 仓库的 `wrangler.toml` 已经把 `main` 与 `[assets]` 都配好了，
-> 这条命令会直接用它们，不需要额外加 `--assets dist` 参数。
+> **Deploy command 请留空。**
+> Pages 会自动发布 Build output directory，不需要 wrangler 参与。
+> 若误填 `npx wrangler deploy`（Workers 命令），Cloudflare 会直接拒绝。
 
 > **Build command 说明**
 > 仓库的 `package.json` 里 `build` 脚本是：
@@ -117,7 +139,7 @@ Cloudflare Workers + Assets = **一个 Worker 脚本 + 一份静态资源**，�
 构建成功后控制台会显示你的域名：
 
 ```
-https://talent-identifier.<你的子域>.workers.dev
+https://talent-identifier.pages.dev
 ```
 
 ### 步骤 5 · 绑定自定义域名（可选）
@@ -188,6 +210,7 @@ npm run cf:dev
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | **Missing entry-point to Worker script or to assets directory** | **构建阶段失败，dist/ 没生成** | 见下方专项说明 |
+| **run a Workers-specific command in a Pages project** | Deploy command 填了 `npx wrangler deploy` | **改成留空**，或 `npx wrangler pages deploy dist` |
 | 页面 404 | Build output directory 填错 | 必须是 `dist` |
 | 构建报 `archetypes_corpus.data.mjs` 不存在 | Build command 被简化了 | 改回 `npm run build` |
 | `/api/health` 404 | Functions 未启用 | 确认仓库里有 `functions/` 目录 |
