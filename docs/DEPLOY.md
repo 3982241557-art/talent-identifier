@@ -1,6 +1,6 @@
-# 部署指南（v15.2 · Cloudflare Pages）
+# 部署指南（v15.4 · Cloudflare Workers + Assets）
 
-> 部署平台：**Cloudflare Pages**（静态资源 + Pages Functions）
+> 部署平台：**Cloudflare Workers**（静态资源 + Worker 脚本）
 > 部署方式：GitHub 仓库 push → Cloudflare 自动拉取 → 自动构建 → 自动发布
 > 费用：免费额度足够个人项目使用
 
@@ -8,18 +8,35 @@
 
 ## 0. 架构前提（先读这段，能省掉 80% 的排查时间）
 
-Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，同一个域名：
+Cloudflare Workers + Assets = **一个 Worker 脚本 + 一份静态资源**，同一个域名：
 
 ```
-浏览器  ──►  https://<你的项目>.pages.dev
-              ├── /api/*  → Pages Function（functions/api/[[path]].js）
-              │              └─ Express 应用逻辑 + DeepSeek + 星历引擎
-              └── /*      → Vite 构建产物（dist/）
+浏览器  ──►  https://talent-identifier.<子域>.workers.dev
+              ├── /api/*  → Worker（functions/_worker.js）
+              │              └─ api-handler.js + DeepSeek + 星历引擎
+              └── /*      → Workers Assets（dist/，边缘缓存）
 ```
 
 **关键点：**
 - 前后端**同域同源** → 不需要 nginx、不需要反向代理、没有 CORS 预检
 - 一次部署搞定，不需要拆两个项目
+
+### v15.4 · 为什么从 Pages 改成 Workers
+
+控制台的 **Deploy command** 是 `npx wrangler deploy` —— 那是 **Workers** 的发布命令，
+不是 Pages 的（Pages 要用 `wrangler pages deploy dist`）。
+
+按 Pages 配的话，wrangler.toml 里既没有 `main`（Worker 入口），
+也没有 `[assets]`（静态资源绑定），发布阶段必然报：
+
+```
+[ERROR] Missing entry-point to Worker script or to assets directory
+```
+
+所以本项目统一走 **Workers + Assets**：
+- `main = "functions/_worker.js"` —— Worker 入口，wrangler 自动打包
+- `[assets] directory = "./dist"` —— 静态资源走边缘缓存
+- 控制台的 Deploy command 保持 `npx wrangler deploy` 即可，**不用改**
 
 ---
 
@@ -49,9 +66,14 @@ Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，�
 | **Framework preset** | `None` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
+| **Deploy command** | `npx wrangler deploy` |
 | Root directory | 留空（仓库根目录） |
 | **Node version** | `22`（或留空 —— 仓库有 `.node-version` 会自动生效） |
 | Environment variables | 留空（下一步单独配） |
+
+> **Deploy command 必须是 `npx wrangler deploy`**（Workers 命令）。
+> 仓库的 `wrangler.toml` 已经把 `main` 与 `[assets]` 都配好了，
+> 这条命令会直接用它们，不需要额外加 `--assets dist` 参数。
 
 > **Build command 说明**
 > 仓库的 `package.json` 里 `build` 脚本是：
@@ -95,7 +117,7 @@ Cloudflare Pages = **静态资源 + Pages Functions（Workers 运行时）**，�
 构建成功后控制台会显示你的域名：
 
 ```
-https://talent-identifier.pages.dev
+https://talent-identifier.<你的子域>.workers.dev
 ```
 
 ### 步骤 5 · 绑定自定义域名（可选）
