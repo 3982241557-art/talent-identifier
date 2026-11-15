@@ -66,19 +66,65 @@ let pagesOutDir = null
     check('wrangler.toml 存在', false, '文件缺失 —— Cloudflare 将无法定位静态资源目录')
   } else {
     const src = readFileSync(file, 'utf-8')
+    /*
+     * v15.4：同时支持两种部署形态
+     *
+     *  · Pages 形态 → pages_build_output_dir = "./dist"
+     *  · Workers 形态 → main = "functions/_worker.js"
+     *                 + [assets] directory = "./dist"
+     *
+     * 两者都必须把静态资源指到 dist/，
+     * 只是字段名不同 —— 检查器要把两种都认。
+     */
     const m = src.match(/pages_build_output_dir\s*=\s*['"]([^'"]+)['"]/)
     pagesOutDir = m?.[1] ?? null
+
+    const main = src.match(/^main\s*=\s*['"]([^'"]+)['"]/m)?.[1] ?? null
+    const assetsDir = src.match(/^directory\s*=\s*['"]([^'"]+)['"]/m)?.[1] ?? null
+    const assetsBinding = src.match(/^binding\s*=\s*['"]([^'"]+)['"]/m)?.[1] ?? null
+
+    const isPagesMode = pagesOutDir !== null
+    const isWorkersMode = main !== null && assetsDir !== null
+
     check('wrangler.toml 存在', true)
     check(
-      'wrangler.toml 声明了 pages_build_output_dir',
-      pagesOutDir !== null,
-      '缺少该字段 —— 这是 "Missing entry-point" 的直接原因',
+      'wrangler.toml 声明了静态资源目录（Pages 或 Workers 形态）',
+      isPagesMode || isWorkersMode,
+      '两种形态都没有 —— Cloudflare 找不到 assets directory，必然报 Missing entry-point',
     )
-    check(
-      `wrangler.toml 的 pages_build_output_dir = "${pagesOutDir}"`,
-      pagesOutDir?.replace(/^\.\//, '') === 'dist',
-      `期望 "./dist" 或 "dist"，实际 "${pagesOutDir}"`,
-    )
+
+    if (isPagesMode) {
+      check(
+        `wrangler.toml 的 pages_build_output_dir = "${pagesOutDir}"`,
+        pagesOutDir?.replace(/^\.\//, '') === 'dist',
+        `期望 "./dist" 或 "dist"，实际 "${pagesOutDir}"`,
+      )
+    }
+
+    if (isWorkersMode) {
+      check(
+        `wrangler.toml 的 main = "${main}"`,
+        true,
+      )
+      check(
+        `wrangler.toml 的 [assets] directory = "${assetsDir}"`,
+        assetsDir?.replace(/^\.\//, '') === 'dist',
+        `期望 "./dist" 或 "dist"，实际 "${assetsDir}"`,
+      )
+      check(
+        `wrangler.toml 的 [assets] binding = "${assetsBinding}"`,
+        Boolean(assetsBinding),
+        '缺少 binding —— Worker 拿不到静态资源',
+      )
+
+      /* main 指向的文件必须真实存在 */
+      const mainFile = resolve(root, main)
+      check(
+        `main 指向的文件存在（${main}）`,
+        existsSync(mainFile),
+        '文件不存在 —— 部署时会报找不到 Worker 入口',
+      )
+    }
 
     /* [vars] 会与控制台环境变量互相覆盖，应由控制台单一管理 */
     const wranglerHasVars = /^\s*\[vars\]/m.test(src)

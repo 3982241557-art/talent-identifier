@@ -131,7 +131,7 @@ export async function handleApi(context) {
         configured: isConfiguredWorkers(env),
         placeholder: isPlaceholderKeyWorkers(env),
         model: DEEPSEEK_MODEL_WORKERS(env),
-        runtime: 'cloudflare-pages-functions',
+        runtime: 'cloudflare-worker',
         errors: ERR_WORKERS,
       })
     }

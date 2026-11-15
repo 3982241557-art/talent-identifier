@@ -1,74 +1,103 @@
 # ============================================================
-#  Cloudflare Pages 配置（v15.3）
+#  Cloudflare 部署配置（v15.4）
 # ============================================================
 #
+#  ============================================================
+#  v15.4 · 从 Pages 切换到 Workers（Assets）
+#  ============================================================
+#
+#  【为什么换】
+#  之前按 Pages 部署（Build output directory = dist，
+#  Deploy command = wrangler pages deploy dist），
+#  但控制台的 Deploy command 填的是 `npx wrangler deploy` ——
+#  那是 **Workers** 的发布命令，不是 Pages 的。
+#
+#  结果：构建四步全绿（dist/ 已生成），
+#  但发布阶段 Workers 找不到 Worker 入口脚本（缺 main）
+#  也没有静态资源绑定（缺 [assets]），
+#  于是报 "Missing entry-point to Worker script or to assets directory"。
+#
+#  【本文件采用的方案：Workers + Assets】
+#  Workers 的静态资源能力（Workers Assets）与 Pages 等价，
+#  但发布路径是 `wrangler deploy`，与控制台的 Deploy command 完全一致 ——
+#  不用改控制台，改代码就行。
+#
 #  【架构】
-#  Cloudflare Pages = 静态资源 + Pages Functions（Workers 运行时）
+#    浏览器 ──► https://talent-identifier.<子域>.workers.dev
+#                ├── /api/*  → Worker（functions/_lib/api-handler.js）
+#                └── /*      → 静态资源（dist/，走 [assets]）
 #
-#    · 静态资源  → Vite 构建产物（dist/）
-#    · Functions  → functions/api/[[path].js]
-#      捕获 /api/* 的全部请求，转发到 Express 应用逻辑
+#  前后端同域同源，无需跨域配置。
 #
-#  同一个域名、一次部署，前后端天然同源 —— 无跨域、无预检。
-#
-#  【重要：Functions 与静态资源的优先级】
-#  Pages 的 Functions 只在 **functions/ 目录**存在时启用。
-#  路由优先级：Functions > 静态资源 > SPA 兜底。
-#  所以 /api/* 一定先进 Functions，其余路径才落到静态资源。
-#
-#  ============================================================
-#  v15.3 · 修复 "Missing entry-point to Worker script or to assets directory"
-#  ============================================================
-#
-#  【报错的真实原因】
-#  这个报错说的是「找不到产物」，但根因通常在**构建阶段**：
-#
-#    Cloudflare Pages 的构建环境默认 NODE_ENV=production
-#      → npm install / npm ci 跳过 devDependencies
-#      → typescript 与 vite 没装上
-#      → `sh: tsc: command not found`
-#      → vite build 从未执行
-#      → dist/ 目录根本不存在
-#      → Cloudflare 找不到 assets directory → 报 Missing entry-point
-#
-#  【本仓库的应对】
-#    package.json 的 build 脚本已改为 `node scripts/cloud-build.mjs`，
-#    它会：
-#      1. 检查 tsc / vite 是否可用
-#      2. 缺失则自动 `npm install --include=dev` 补装
-#      3. 生成语料库静态模块 → 类型检查 → Vite 构建
-#      4. 校验 dist/index.html 是否真的产出，不产出直接报错退出
-#
-#    所以无论控制台的 Build command 填的是
-#    `npm run build`、`npm ci && npm run build` 还是别的组合，
-#    都能走到同一条可靠路径。
-#
-#  【环境变量】
-#  在 Cloudflare 控制台配置（不要写进代码）：
-#    DEEPSEEK_API_KEY  —— 必填，选 Secret 类型
-#    DEEPSEEK_BASE_URL —— 可选，默认 https://api.deepseek.com
-#    DEEPSEEK_MODEL    —— 可选，默认 deepseek-chat
-#
-#  ⚠️ 本文件**故意不写 [vars]**：
-#     Pages 会把 wrangler.toml 里的 [vars] 与控制台设置合并，
-#     两边同时存在容易互相覆盖、难以排查。
-#     唯一真相源是 Cloudflare 控制台。
+#  【main 指向什么】
+#  main 必须是**打包后的 Worker 脚本**（单个 JS 文件），
+#  不是 functions/ 目录 —— Workers 不像 Pages 会自动扫描目录。
+#  所以构建流程里用 `wrangler pages functions build` 把
+#  functions/ 打成单文件，再由 [assets] 绑定 dist/。
 # ============================================================
 
 name = "talent-identifier"
 
-# 静态资源目录 —— 必须与 Vite 的 build.outDir 一致
-# vite.config.ts 未显式设置 outDir，Vite 默认就是 dist
-pages_build_output_dir = "./dist"
+# ------------------------------------------------------------
+#  Worker 入口
+# ------------------------------------------------------------
+# `wrangler deploy` 会**自动打包** main 指向的脚本，
+# 并递归解析它的 import（包括 ../server/*.mjs）。
+# 所以这里直接指源码，不必自己预打包。
+#
+# functions/_worker.js 的职责：
+#   /api/* → api-handler.js
+#   /*     → ASSETS 绑定（dist/）
+main = "functions/_worker.js"
 
-# Workers 运行时版本
+# ------------------------------------------------------------
+#  Workers 运行时
+# ------------------------------------------------------------
+# ⚠️ 这两个字段必须放在**顶层**（任何 [段] 之前）。
+#    TOML 里一旦出现 [assets]，后面的键就都属于 assets 段了，
+#    写成 [assets] 之后会导致 wrangler 报
+#    "A compatibility_date is required when uploading a Worker"。
 compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
 
-# 构建命令 —— 与 package.json 的 build 脚本一致
-# 控制台若已填写 Build command，优先级更高；此处作为 CLI 部署与兜底
+# ------------------------------------------------------------
+#  静态资源（Vite 构建产物）
+# ------------------------------------------------------------
+[assets]
+directory = "./dist"
+# Worker 通过 ASSETS 绑定读取静态资源
+binding = "ASSETS"
+# 未命中的路径回 index.html（SPA 兜底），避免刷新页面 404
+not_found_handling = "single-page-application"
+
+# ------------------------------------------------------------
+#  构建命令
+# ------------------------------------------------------------
+# Cloudflare 控制台的 Build command 应为：
+#   npm run build:worker
+#
+# 它会依次完成：
+#   1. 检查并补装 devDependencies（防 NODE_ENV=production 陷阱）
+#   2. 部署配置一致性检查
+#   3. 生成语料库静态模块
+#   4. TypeScript 类型检查
+#   5. Vite 构建 → dist/
+#   6. 打包 Worker → .wrangler/worker-build/index.js
 [build]
 command = "npm run build"
 
-# 注意：DEEPSEEK_API_KEY 是敏感信息，
-# 请在 Cloudflare 控制台的 Settings → Environment variables 里
-# 添加为 **Secret**（加密类型），不要写进本文件。
+# ------------------------------------------------------------
+#  环境变量
+# ------------------------------------------------------------
+#  【重要】本文件**故意不写 [vars]**
+#  wrangler.toml 的 [vars] 会与 Cloudflare 控制台的环境变量合并覆盖，
+#  两边同时存在会让密钥来源分裂、极难排查。
+#  唯一真相源 = Cloudflare 控制台
+#  → Settings → Variables and Secrets
+#
+#  必填（Secret 类型）：
+#    DEEPSEEK_API_KEY
+#  可选（Text 类型）：
+#    DEEPSEEK_BASE_URL  默认 https://api.deepseek.com
+#    DEEPSEEK_MODEL     默认 deepseek-chat
+# ------------------------------------------------------------

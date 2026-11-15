@@ -1,5 +1,5 @@
 /* ============================================================
- *  Cloudflare Pages 部署模拟器（v15.2）
+ *  Cloudflare 部署模拟器（Workers + Assets）（v15.2）
  * ============================================================
  *
  *  在本地完整复刻 Cloudflare Pages 的运行时行为：
@@ -196,7 +196,7 @@ server.listen(8899, async () => {
     const r = await fetch(`${base}/api/health`)
     const j = await r.json()
     check('/api/health 进 Function', r.status === 200 && j.ok === true, JSON.stringify(j).slice(0, 100))
-    check('返回 runtime 标识', j.runtime === 'cloudflare-pages-functions')
+    check('返回 runtime 标识', j.runtime === 'cloudflare-worker')
   }
   {
     const r = await fetch(`${base}/api/nope`, {
