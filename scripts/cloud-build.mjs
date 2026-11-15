@@ -67,12 +67,46 @@ function run(command, args, label) {
   }
 }
 
-/** 某个可执行文件是否可用 */
+/**
+ * 某个可执行文件是否可用。
+ *
+ * 【为什么不用 `which`】
+ * `which` 只看 PATH。在 CI 里 PATH 未必包含 ./node_modules/.bin，
+ * 于是「明明装好了」也会被判定为缺失，
+ * 导致脚本去 npm registry 重新下载一遍 —— 又慢又不确定。
+ *
+ * 直接查 node_modules/.bin 更准确，也更快。
+ */
 function hasBin(name) {
+  /* 优先看本地 node_modules/.bin */
+  const local = resolve(root, 'node_modules', '.bin', name)
+  if (existsSync(local)) return true
+
+  /* 回退到 PATH（全局安装的情况） */
   const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [name], {
     stdio: 'ignore',
   })
   return r.status === 0
+}
+
+/**
+ * 调用本地 node_modules/.bin 里的可执行文件。
+ *
+ * 【为什么不用 npx】
+ * npx 在本地找不到时会**去 npm registry 下载同名包**。
+ * `npx tsc` 找不到 tsc 时会拉取一个叫 `tsc` 的**废弃包**（非 TypeScript 官方），
+ * 行为不可控且可能报出莫名其妙的错。
+ *
+ * 直接执行 node_modules/.bin/ 下的脚本，行为完全确定。
+ */
+function runLocalBin(name, args, label) {
+  const bin = resolve(root, 'node_modules', '.bin', name)
+  if (existsSync(bin)) {
+    run(bin, args, label)
+    return
+  }
+  /* 本地没有就用 npx（此时 npx 会命中已安装的包，不至于下载废弃包） */
+  run('npx', ['--no-install', name, ...args], label)
 }
 
 /* ============================================================
@@ -140,12 +174,12 @@ run('node', ['scripts/build-corpus.mjs'], '生成语料库模块')
 /* ============================================================
  *  3 · 类型检查
  * ============================================================ */
-run('npx', ['tsc', '-b'], 'TypeScript 类型检查')
+runLocalBin('tsc', ['-b'], 'TypeScript 类型检查')
 
 /* ============================================================
  *  4 · 构建前端
  * ============================================================ */
-run('npx', ['vite', 'build'], 'Vite 构建')
+runLocalBin('vite', ['build'], 'Vite 构建')
 
 /* ============================================================
  *  5 · 产物校验（提前发现 "Missing entry-point"）

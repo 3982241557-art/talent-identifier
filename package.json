@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "node scripts/cloud-build.mjs",
@@ -20,7 +23,8 @@
     "cf:build": "wrangler pages functions build --outdir .wrangler/functions-build",
     "cf:dev": "wrangler pages dev dist --compatibility-date=2025-01-01",
     "build:local": "node scripts/build-corpus.mjs && tsc -b && vite build",
-    "check:config": "node scripts/check-config.mjs"
+    "check:config": "node scripts/check-config.mjs",
+    "build:cloudflare": "node scripts/cloud-build.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",

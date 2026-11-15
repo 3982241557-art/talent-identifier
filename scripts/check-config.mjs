@@ -140,6 +140,96 @@ let pagesOutDir = null
   }
 }
 
+/* ---------- 4.5 · Node 版本 ---------- */
+{
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
+
+  check(
+    `package.json 声明 engines.node = "${pkg.engines?.node}"`,
+    typeof pkg.engines?.node === 'string',
+    '未声明 engines —— Cloudflare 可能用 Node 18/20，而 wrangler 要求 >=22.12.0',
+  )
+
+  check(
+    'engines.node 满足 >=22.12.0',
+    Boolean(pkg.engines?.node?.includes('22')),
+    `当前 "${pkg.engines?.node}"`,
+  )
+
+  /* .node-version / .nvmrc 会被 Cloudflare 用来选 Node 版本 */
+  const nv = resolve(root, '.node-version')
+  const nvmrc = resolve(root, '.nvmrc')
+  check('.node-version 存在（锁定 Cloudflare 的 Node 版本）', existsSync(nv))
+  check('.nvmrc 存在', existsSync(nvmrc))
+
+  if (existsSync(nv)) {
+    const v = readFileSync(nv, 'utf-8').trim()
+    check(
+      `.node-version = ${v}`,
+      v.startsWith('22'),
+      '建议锁定 22.x —— wrangler / vite 8 都要求 >=22.12.0',
+    )
+  }
+}
+
+/* ---------- 4.6 · 无 Vercel 等废弃平台残留 ---------- */
+{
+  const serverPkg = resolve(root, 'server', 'package.json')
+  if (existsSync(serverPkg)) {
+    const d = JSON.parse(readFileSync(serverPkg, 'utf-8'))
+    check(
+      'server/package.json 无 vercel deploy 脚本',
+      !d.scripts?.deploy,
+      '废弃平台的脚本应清理，避免误触发',
+    )
+  }
+
+  const residue = []
+  for (const f of ['package.json', 'server/package.json']) {
+    const src = readFileSync(resolve(root, f), 'utf-8')
+    if (/vercel/i.test(src)) residue.push(f)
+  }
+  check(
+    '无 Vercel 配置残留',
+    residue.length === 0,
+    `仍含 vercel 引用：${residue.join(', ')}`,
+  )
+}
+
+/* ---------- 4.7 · Functions 依赖链不含 Node 内置模块 ---------- */
+{
+  /*
+   * Workers 运行时没有 node:fs / node:path 等内置模块。
+   * Functions 的整条依赖链一旦引入，Functions 构建就会失败 ——
+   * 而且报错发生在 bundling 阶段，很容易被误判成「入口文件问题」。
+   */
+  const files = [
+    'functions/api/[[path]].js',
+    'functions/_lib/api-handler.js',
+    'functions/_lib/chart-workers.js',
+    'functions/_lib/deepseek-workers.js',
+    'functions/_lib/talent-workers.js',
+    'server/prompt.mjs',
+    'server/mbtiCanon.mjs',
+    'server/mbtiFallback.mjs',
+    'server/corpus-workers.mjs',
+  ]
+  const bad = []
+  for (const f of files) {
+    const p = resolve(root, f)
+    if (!existsSync(p)) continue
+    const src = readFileSync(p, 'utf-8')
+    if (/from\s+['"](node:|fs['"]|path['"]|url['"]|os['"]|child_process['"])/.test(src)) {
+      bad.push(f)
+    }
+  }
+  check(
+    'Functions 依赖链无 Node 内置模块',
+    bad.length === 0,
+    `这些文件引入了 node: 内置模块：${bad.join(', ')}`,
+  )
+}
+
 /* ---------- 5. 构建产物（若已构建） ---------- */
 {
   const dist = resolve(root, 'dist')
