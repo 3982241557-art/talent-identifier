@@ -117,6 +117,24 @@ export default defineConfig(({ mode }) => {
     ],
     // 使用相对路径，便于以 file:// 或任意子路径部署
     base: './',
+    /*
+     * v15.3 · 显式声明构建输出目录
+     *
+     * Vite 默认就是 dist，但**显式写出来**很重要：
+     * Cloudflare Pages 的 Build output directory 必须与这里一致，
+     * 否则平台找不到产物就会报
+     *   "Missing entry-point to Worker script or to assets directory"
+     *
+     * 三处必须一致：
+     *   1. vite.config.ts     → build.outDir        （这里）
+     *   2. wrangler.toml      → pages_build_output_dir
+     *   3. Cloudflare 控制台  → Build output directory
+     */
+    build: {
+      outDir: 'dist',
+      assetsDir: 'assets',
+      emptyOutDir: true,
+    },
     server: {
       host: true,
       port: 5180,
