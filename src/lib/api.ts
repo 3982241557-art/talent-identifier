@@ -1,4 +1,4 @@
-import type { Chart, MbtiProfile } from '../types'
+import type { Chart, MbtiProfile, SoulDual } from '../types'
 
 /* ============================================================
  *  后端 API 客户端（v6.0）
@@ -173,6 +173,11 @@ export interface TalentPayloadResult {
   categories: TalentCategoryResult[]
   yearly: Array<{ year: number; focus: string; action: string }>
   advice: string[]
+  /* ---------------- v16.0 · 双版本 ---------------- */
+  /** ⚡️ 极简版：3-5 条短句 */
+  minimal?: string[]
+  /** 🔭 深度版：3-5 段话 */
+  deep?: string[]
 }
 
 /**
@@ -332,8 +337,8 @@ export async function postSoul(payload: {
   chart?: Chart
   mbti?: MbtiProfile | null
   place?: string
-}): Promise<{ text: string }> {
-  return request<{ text: string }>('/api/soul', payload, 60_000)
+}): Promise<SoulDual> {
+  return request<SoulDual>('/api/soul', payload, 60_000)
 }
 
 /* ============================================================
@@ -372,6 +377,11 @@ export interface TarotReadingResult {
   action: string
   /** 是否使用了本地兜底 */
   degraded?: boolean
+  /* ---------------- v16.0 · 双版本 ---------------- */
+  /** ⚡️ 极简版 */
+  minimal?: { gist: string; action: string }
+  /** 🔭 深度版 */
+  deep?: { gist: string; action: string }
 }
 
 /**
@@ -410,6 +420,11 @@ export interface MultiFortuneResult {
   label: string
   dimensions: FortuneDimension[]
   overview?: string
+  /* ---------------- v16.0 · 双版本 ---------------- */
+  /** ⚡️ 极简版 */
+  minimal?: { overview: string; dimensions: FortuneDimension[] }
+  /** 🔭 深度版 */
+  deep?: { overview: string; dimensions: FortuneDimension[] }
 }
 
 /** 请求四维运势（事业学业 / 财富 / 健康 / 爱情） */

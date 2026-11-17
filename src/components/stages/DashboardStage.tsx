@@ -156,7 +156,7 @@ export function DashboardStage({
           `天空给的是倾向，不是判决 —— 迈不迈步，始终由你决定。`
       }
       if (/mbti|性格|解码|类型/i.test(m)) {
-        return `你的性格底色是 ${mbti?.type ?? '未记录'}。` +
+        return `你骨子里是个什么样的人：${mbti?.type ?? '未记录'}。` +
           `环绕星盘的「MBTI 解码」卡片里有完整的类型解释、优势清单，` +
           `还有一群和你同类型的代表人物。`
       }
@@ -274,7 +274,7 @@ export function DashboardStage({
       title: 'MBTI 解码',
       hint: mbti
         ? `${mbti.type} · ${MBTI_TYPES[mbti.type]?.nickname ?? ''}`
-        : '还没有性格底色记录',
+        : '还没测过你的性格',
       accent: theme.primary,
     },
     {

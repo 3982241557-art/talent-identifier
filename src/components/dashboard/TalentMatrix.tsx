@@ -9,6 +9,11 @@ import type {
 import { ELEMENT_THEMES } from '../../data/elementThemes'
 import { computeTalent } from '../../lib/talent'
 import { postTalent } from '../../lib/api'
+import {
+  VersionToggle,
+  DEFAULT_VERSION,
+  type ReportVersion,
+} from '../common/VersionToggle'
 
 /* ============================================================
  *  天赋解析 · 几何天赋矩阵（v12.0）
@@ -99,6 +104,14 @@ export function TalentMatrix({
     return { pts, d, spokes, step }
   }, [result])
 
+  /*
+   * v16.0 · 双版本切换
+   *
+   * 后端一次返回 minimal（3-5 条短句）与 deep（3-5 段话），
+   * 这里只切数据 —— 不发请求，切换 0 延迟。
+   */
+  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
+
   const handleAnalyse = async () => {
     setLoading(true)
     setNote('')
@@ -152,6 +165,9 @@ export function TalentMatrix({
           })),
           advice: (ai.advice ?? []).map((a) => a ?? ''),
           source: 'ai',
+          /* v16.0：把双版本一并带过来 */
+          minimal: ai.minimal,
+          deep: ai.deep,
         }
         setResult(merged)
         onResult?.(merged)
@@ -532,6 +548,57 @@ export function TalentMatrix({
               </div>
             </div>
           )}
+
+          {/* ══════════ v16.0 · 双版本切换 + 摘要 ══════════ */}
+          {(() => {
+            const minimal = result.minimal ?? []
+            const deep = result.deep ?? []
+            /* 只要有一版内容就显示切换器 —— 本地兜底也有两版 */
+            const hasBoth = minimal.length > 0 || deep.length > 0
+
+            if (!hasBoth) return null
+
+            const list = version === 'minimal' ? minimal : deep
+
+            return (
+              <div className="mt-12 border-t border-white/8 pt-8">
+                {/* 切换胶囊 —— sticky，用户随时能切 */}
+                <div className="sticky top-2 z-20 mb-8 flex justify-center">
+                  <VersionToggle value={version} onChange={setVersion} />
+                </div>
+
+                <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
+                  {version === 'minimal' ? '一眼看清' : '把来龙去脉聊透'}
+                </h4>
+
+                <ul className="mt-6 space-y-4">
+                  {list.map((line, i) => (
+                    <li key={i} className="flex gap-4">
+                      <span
+                        className="mt-[13px] block h-1 w-1 shrink-0 rounded-full"
+                        style={{ background: theme.primary }}
+                      />
+                      <p
+                        className="serif-body leading-[1.62] text-mist"
+                        style={{
+                          fontSize:
+                            version === 'minimal'
+                              ? 'clamp(1.15rem,1.3vw,1.5rem)'
+                              : 'clamp(1rem,1.15vw,1.3rem)',
+                          color:
+                            version === 'minimal'
+                              ? 'var(--color-mist)'
+                              : 'rgba(244,246,250,0.78)',
+                        }}
+                      >
+                        {line}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
 
           {/* 落地建议 */}
           {result.advice.length > 0 && (

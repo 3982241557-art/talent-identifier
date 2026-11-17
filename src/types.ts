@@ -307,6 +307,60 @@ export interface TalentResult {
   advice: string[]
   /** 数据来源：AI 或本地推演 */
   source: 'ai' | 'local'
+  /* ---------------- v16.0 · 双版本 ---------------- */
+  /** ⚡️ 极简版：3-5 条短句，一眼看懂 */
+  minimal?: string[]
+  /** 🔭 深度版：3-5 段话，聊透来龙去脉 */
+  deep?: string[]
+}
+
+/* ============================================================
+ *  v16.0 · 双版本通用结构
+ * ============================================================ */
+
+/** 解读版本 */
+export type ReportVersion = 'minimal' | 'deep'
+
+/** 灵魂底色的双版本 */
+export interface SoulDual {
+  /** 旧字段（保持向后兼容，默认显示极简版） */
+  text: string
+  /** ⚡️ 极简版：讲清「你骨子里是个什么样的人」 */
+  minimal: string
+  /** 🔭 深度版：像老朋友那样把成因与卡点聊透 */
+  deep: string
+}
+
+/** 运势维度 */
+export interface FortuneDimension {
+  key: string
+  label: string
+  summary: string
+  trend: string
+  warning: string
+}
+
+/** 运势的双版本 */
+export interface FortuneDual {
+  scope: string
+  label: string
+  overview: string
+  dimensions: FortuneDimension[]
+  /** ⚡️ 极简版 */
+  minimal: { overview: string; dimensions: FortuneDimension[] }
+  /** 🔭 深度版 */
+  deep: { overview: string; dimensions: FortuneDimension[] }
+}
+
+/** 塔罗解读的双版本 */
+export interface TarotDual {
+  cards: Array<{ name: string; upright: boolean; meaning: string }>
+  gist: string
+  action: string
+  /** ⚡️ 极简版 */
+  minimal: { gist: string; action: string }
+  /** 🔭 深度版 */
+  deep: { gist: string; action: string }
 }
 
 /* ---------------- 历史与存档 ---------------- */

@@ -33,12 +33,17 @@ export function AuroraBackdrop({
 }: AuroraBackdropProps) {
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden>
-      {/* ---------- 底色：不再是死黑，而是深空蓝紫 ---------- */}
+      {/* ---------- v16.0 · 底色透明 ----------
+       *
+       *  现在整个应用共用**同一个** CosmicCanvas（全局唯一宇宙画布），
+       *  这里再铺一层实色底会把星空整个盖住。
+       *  所以这里只保留元素环境光的晕染，不铺底。
+       * ---------- */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(178deg, #0a1024 0%, #0d1430 34%, #111a3c 62%, #0a1226 100%)',
+            'radial-gradient(ellipse 70% 56% at 50% 46%, rgba(10,16,32,0.28) 0%, rgba(0,0,0,0) 72%)',
         }}
       />
 
@@ -46,7 +51,7 @@ export function AuroraBackdrop({
       <img
         src={bgUrl}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover opacity-[0.62]"
+        className="absolute inset-0 h-full w-full object-cover opacity-[0.22]"
         aria-hidden
         draggable={false}
         onError={(e) => {
@@ -57,7 +62,7 @@ export function AuroraBackdrop({
 
       {/* ---------- 极光带 1：左上 → 右下的斜向光幕 ---------- */}
       <div
-        className="absolute -left-[18%] -top-[28%] h-[86%] w-[92%] animate-[aurora-drift_34s_ease-in-out_infinite] opacity-[0.62]"
+        className="absolute -left-[18%] -top-[28%] h-[86%] w-[92%] animate-[aurora-drift_34s_ease-in-out_infinite] opacity-[0.34]"
         style={{
           background: `radial-gradient(ellipse 52% 50% at 50% 50%, ${ambient} 0%, ${primary}55 38%, rgba(0,0,0,0) 72%)`,
           filter: 'blur(38px)',
@@ -66,7 +71,7 @@ export function AuroraBackdrop({
 
       {/* ---------- 极光带 2：右下 → 左上的对向光幕 ---------- */}
       <div
-        className="absolute -right-[16%] top-[24%] h-[82%] w-[86%] animate-[aurora-drift-2_41s_ease-in-out_infinite] opacity-[0.5]"
+        className="absolute -right-[16%] top-[24%] h-[82%] w-[86%] animate-[aurora-drift-2_41s_ease-in-out_infinite] opacity-[0.28]"
         style={{
           background: `radial-gradient(ellipse 48% 46% at 50% 50%, ${secondary}44 0%, ${primary}33 40%, rgba(0,0,0,0) 74%)`,
           filter: 'blur(46px)',
@@ -75,7 +80,7 @@ export function AuroraBackdrop({
 
       {/* ---------- 极光带 3：底部铺底的第三色 ---------- */}
       <div
-        className="absolute -bottom-[30%] left-[14%] h-[70%] w-[76%] animate-[aurora-drift-3_47s_ease-in-out_infinite] opacity-[0.42]"
+        className="absolute -bottom-[30%] left-[14%] h-[70%] w-[76%] animate-[aurora-drift-3_47s_ease-in-out_infinite] opacity-[0.24]"
         style={{
           background: `radial-gradient(ellipse 50% 46% at 50% 50%, ${secondary}38 0%, ${ambient} 46%, rgba(0,0,0,0) 76%)`,
           filter: 'blur(52px)',
@@ -123,7 +128,7 @@ export function AuroraBackdrop({
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 96% 88% at 50% 46%, rgba(0,0,0,0) 42%, rgba(4,7,18,0.52) 84%, rgba(3,5,14,0.78) 100%)',
+            'radial-gradient(ellipse 96% 88% at 50% 46%, rgba(0,0,0,0) 48%, rgba(4,7,18,0.28) 86%, rgba(3,5,14,0.48) 100%)',
         }}
       />
 
@@ -132,14 +137,14 @@ export function AuroraBackdrop({
         className="absolute inset-x-0 top-0 h-[22%]"
         style={{
           background:
-            'linear-gradient(to bottom, rgba(3,6,16,0.62) 0%, rgba(0,0,0,0) 100%)',
+            'linear-gradient(to bottom, rgba(3,6,16,0.34) 0%, rgba(0,0,0,0) 100%)',
         }}
       />
       <div
         className="absolute inset-x-0 bottom-0 h-[18%]"
         style={{
           background:
-            'linear-gradient(to top, rgba(3,6,16,0.58) 0%, rgba(0,0,0,0) 100%)',
+            'linear-gradient(to top, rgba(3,6,16,0.32) 0%, rgba(0,0,0,0) 100%)',
         }}
       />
     </div>

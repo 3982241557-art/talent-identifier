@@ -183,7 +183,7 @@ export function Cascader({ value, onChange }: CascaderProps) {
           <button
             type="button"
             onClick={() => void loadRegions()}
-            className="border-0 bg-ink px-5 py-2 text-[clamp(0.875rem,1vw,1.125rem)] font-semibold tracking-[0.18em] text-paper transition-opacity duration-500 hover:opacity-85 focus:outline-none"
+            className="btn-photon border-0 rounded-full px-5 py-2 text-[clamp(0.875rem,1vw,1.125rem)] font-semibold tracking-[0.18em] focus:outline-none"
           >
             重试
           </button>
@@ -221,7 +221,7 @@ function Select({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-transparent pb-2 text-[clamp(1.125rem,1.3vw,1.6rem)] font-semibold text-ink outline-none disabled:text-ink-mute/50 [color-scheme:light]"
+          className="w-full bg-transparent pb-2 text-[clamp(1.125rem,1.3vw,1.6rem)] font-semibold text-ink outline-none disabled:text-ink-mute/50 [color-scheme:dark]"
         >
           <option value="">{placeholder}</option>
           {options.map((o) => (

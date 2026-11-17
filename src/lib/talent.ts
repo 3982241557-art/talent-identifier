@@ -310,7 +310,30 @@ export function computeTalent(
     `把「${cats[3].label}」当成慢钱。短期看不出变化，但它决定你三年后还有多少选择。`,
   ]
 
-  return { categories: cats, yearly, advice, source: 'local' }
+  /*
+   * v16.0 · 双版本（本地兜底也要有）
+   *
+   * 本地语料天然就是「短句」，
+   * 所以 minimal = 极简版，deep = 把每个领域展开成一段。
+   * 这样即使 AI 不可用，用户依然能切换两个版本。
+   */
+  const minimal = [
+    cats[0].title,
+    cats[1].title,
+    cats[2].title,
+    cats[3].title,
+  ].filter(Boolean)
+
+  const deep = cats.map((c) => `${c.title}。${c.description} ${c.practice}`)
+
+  return {
+    categories: cats,
+    yearly,
+    advice,
+    source: 'local',
+    minimal,
+    deep,
+  }
 }
 
 /**

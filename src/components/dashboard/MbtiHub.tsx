@@ -33,7 +33,7 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
           MBTI 解码
         </h3>
         <p className="serif-body mt-5 text-[25.5px] font-medium leading-[1.62] text-mist/65">
-          还没有性格底色记录。回到出生信息那一步，重新做一次探索。
+          还没测过。回到出生信息那一步，重新走一遍就好。
         </p>
         <button
           onClick={onEdit}

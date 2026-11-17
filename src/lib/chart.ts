@@ -242,8 +242,8 @@ export function buildVerdict(
   const highlights = keywords.filter((k) => text.includes(k))
 
   const coda = mbti
-    ? `这不是判决，只是你目前的起点——${mbti.summary}`
-    : '这不是判决，只是你目前的起点。'
+    ? `这只是你目前的起点——${mbti.summary}`
+    : '这只是你目前的起点。'
 
   return { text, highlights, coda, keywords }
 }

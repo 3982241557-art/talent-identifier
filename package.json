@@ -26,7 +26,8 @@
     "check:config": "node scripts/check-config.mjs",
     "build:cloudflare": "node scripts/cloud-build.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "check:metafiles": "node scripts/check-metafiles.mjs"
+    "check:metafiles": "node scripts/check-metafiles.mjs",
+    "check:copy": "node scripts/check-copy.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",

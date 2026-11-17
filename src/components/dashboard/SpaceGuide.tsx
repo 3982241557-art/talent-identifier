@@ -56,7 +56,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: 'mbti',
     title: 'MBTI',
-    desc: '你的性格底色 —— 四个字母分别代表什么。',
+    desc: '你骨子里是个什么样的人 —— 四个字母分别代表什么。',
   },
   {
     id: 'tip',

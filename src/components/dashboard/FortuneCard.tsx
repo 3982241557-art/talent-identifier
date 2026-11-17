@@ -2,6 +2,12 @@ import { motion } from 'framer-motion'
 import type { Chart } from '../../types'
 import { ELEMENT_THEMES } from '../../data/elementThemes'
 import { deAstro } from '../../lib/copy'
+import {
+  VersionToggle,
+  DEFAULT_VERSION,
+  type ReportVersion,
+} from '../common/VersionToggle'
+import { useState } from 'react'
 import type { FortuneDimension, MultiFortuneResult } from '../../lib/api'
 
 /* ============================================================
@@ -101,6 +107,15 @@ export function FortuneDimensions({
   result: MultiFortuneResult | null
   accent: string
 }) {
+  /*
+   * v16.0 · 双版本切换
+   *
+   * 后端一次返回 minimal 与 deep 两份，
+   * 这里只切数据源 —— **不发请求、不 loading**，
+   * 切换是 0 延迟的。
+   */
+  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
+
   if (!result || result.dimensions.length === 0) {
     return (
       <p className="serif-body py-6 text-[17px] font-semibold leading-[1.6] text-mist/70">
@@ -109,18 +124,44 @@ export function FortuneDimensions({
     )
   }
 
+  /* ---------- 取出当前版本的数据 ---------- */
+  const current =
+    version === 'minimal'
+      ? (result.minimal ?? {
+          overview: result.overview ?? '',
+          dimensions: result.dimensions,
+        })
+      : (result.deep ?? {
+          overview: result.overview ?? '',
+          dimensions: result.dimensions,
+        })
+
+  /* 极简版更短，深度版放开截断上限 */
+  const cap = version === 'minimal' ? 52 : 88
+  const trendCap = version === 'minimal' ? 0 : 92
+
+  /* 只要任一版本存在就显示切换器（本地兜底也有两版） */
+  const hasBoth = Boolean(result.minimal) || Boolean(result.deep)
+
   return (
     <div className="w-full">
-      {result.overview && (
+      {/* ══════════ v16.0 · 双版本切换胶囊 ══════════ */}
+      {hasBoth && (
+        <div className="sticky top-2 z-20 mb-7 flex justify-center">
+          <VersionToggle value={version} onChange={setVersion} />
+        </div>
+      )}
+
+      {current.overview && (
         <p className="serif-body mb-7 border-l-2 pl-6 text-[18px] font-semibold leading-[1.6] text-mist/90"
           style={{ borderColor: accent }}
         >
-          {deAstro(result.overview, { max: 90 })}
+          {deAstro(current.overview, { max: version === 'minimal' ? 56 : 140 })}
         </p>
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {result.dimensions.map((d: FortuneDimension, i) => {
+        {current.dimensions.map((d: FortuneDimension, i) => {
           const meta = DIM_META[d.key] ?? {
             icon: '✦',
             label: d.label,
@@ -152,28 +193,32 @@ export function FortuneDimensions({
 
               {/* 主线判断 */}
               <p className="serif-body mt-4 text-[17px] font-semibold leading-[1.58] text-mist">
-                {deAstro(d.summary, { max: 72 })}
+                {deAstro(d.summary, { max: cap })}
               </p>
 
-              {/* 接下来会怎样 */}
-              <div className="mt-4 border-t border-white/8 pt-4">
-                <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
-                  接 下 来
-                </p>
-                <p className="serif-body mt-2 text-[16px] font-medium leading-[1.58] text-mist/80">
-                  {deAstro(d.trend, { max: 78 })}
-                </p>
-              </div>
+              {/* 接下来会怎样 —— 只有深度版才展开 */}
+              {version === 'deep' && (
+                <div className="mt-4 border-t border-white/8 pt-4">
+                  <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
+                    接 下 来
+                  </p>
+                  <p className="serif-body mt-2 text-[16px] font-medium leading-[1.58] text-mist/80">
+                    {deAstro(d.trend, { max: trendCap })}
+                  </p>
+                </div>
+              )}
 
-              {/* 需要留意 */}
-              <div className="mt-4 border-t border-white/8 pt-4">
-                <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
-                  留 意 这 一 点
-                </p>
-                <p className="serif-body mt-2 text-[16px] font-medium leading-[1.58] text-mist/80">
-                  {deAstro(d.warning, { max: 78 })}
-                </p>
-              </div>
+              {/* 需要留意 —— 只有深度版才展开 */}
+              {version === 'deep' && (
+                <div className="mt-4 border-t border-white/8 pt-4">
+                  <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
+                    留 意 这 一 点
+                  </p>
+                  <p className="serif-body mt-2 text-[16px] font-medium leading-[1.58] text-mist/80">
+                    {deAstro(d.warning, { max: trendCap })}
+                  </p>
+                </div>
+              )}
             </motion.article>
           )
         })}
@@ -306,13 +351,37 @@ export function localFortune(
     }
   })
 
+  const overview =
+    `你这一阵子正走在「${chart.bigThree.sun.sign.keyword}」这条线上。` +
+    `情绪的节律和行动的方式，会轮流浮现。`
+
+  /*
+   * v16.0 · 双版本（本地兜底）
+   *
+   * 极简版只留主线判断，深度版带上趋势与预警。
+   * 结构与 AI 返回的版本**完全一致** ——
+   * 这样切换时布局不动，只是文字换长换短。
+   */
+  const minimal = {
+    overview,
+    dimensions: dimensions.map((d) => ({
+      key: d.key,
+      label: d.label,
+      summary: d.summary,
+      trend: '',
+      warning: '',
+    })),
+  }
+
+  const deep = { overview, dimensions }
+
   return {
     scope,
     label: meta.label,
     dimensions,
-    overview:
-      `你这一阵子正走在「${chart.bigThree.sun.sign.keyword}」这条线上。` +
-      `情绪的节律和行动的方式，会轮流浮现。`,
+    overview,
+    minimal,
+    deep,
   }
 }
 
@@ -388,7 +457,7 @@ export function fortuneText(
 export function TransitScale({ chart }: { chart: Chart }) {
   const theme = ELEMENT_THEMES[chart.bigThree.sun.sign.element]
   const rows = [
-    { label: '性格底色', sign: chart.bigThree.sun.sign },
+    { label: '你骨子里是什么样的人', sign: chart.bigThree.sun.sign },
     { label: '情绪节律', sign: chart.bigThree.moon.sign },
     { label: '第一印象', sign: chart.bigThree.rising.sign },
   ]

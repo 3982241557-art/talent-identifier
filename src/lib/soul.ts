@@ -124,7 +124,7 @@ export function buildSoulPortrait(
         '你的轮廓还在成形之中，走完前面的步骤，这里才会浮现出真正属于你的那一句速写',
       ),
       highlights: [],
-      coda: '这不是结论，只是此刻的你。',
+      coda: '这只是此刻的你，明天可能就不一样了。',
       keywords: [],
     }
   }
@@ -152,7 +152,7 @@ export function buildSoulPortrait(
 
   const highlights = tags.filter((k) => text.includes(k))
 
-  const coda = '这不是结论，只是此刻的你。'
+  const coda = '这只是此刻的你，明天可能就不一样了。'
 
   return { text, highlights, coda, keywords: tags }
 }

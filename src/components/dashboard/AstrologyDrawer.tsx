@@ -360,10 +360,10 @@ export function AstrologyDrawer({
 
                 <span className="mt-9 block h-px w-full bg-white/10" />
 
-                {/* ---------- 底层逻辑 ---------- */}
+                {/* ---------- 它到底怎么算的 ---------- */}
                 <section className="mt-9">
                   <h3 className="serif-title t-sub text-mist">
-                    星盘测算底层逻辑
+                    星盘到底是怎么算出来的
                   </h3>
                   <div className="mt-5 flex flex-col gap-3">
                     {FORMULA.map((f) => (

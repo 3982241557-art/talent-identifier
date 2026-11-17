@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AppContext, type AppAction, type AppState } from './store/AppContext'
 import { applyElementTheme, blendedTheme } from './data/elementThemes'
@@ -14,6 +14,11 @@ import { MbtiStage } from './components/stages/MbtiStage'
 import { FormStage } from './components/stages/FormStage'
 import { VerdictStage } from './components/stages/VerdictStage'
 import { DashboardStage } from './components/stages/DashboardStage'
+import {
+  CosmicCanvas,
+  DEFAULT_CAMERA,
+  type CosmicCamera,
+} from './components/common/CosmicCanvas'
 import type { MbtiSession, Route } from './types'
 
 /* ============================================================
@@ -149,6 +154,19 @@ function reducer(state: AppState, action: AppAction): AppState {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
 
+  /* ============================================================
+   *  v16.0 · 全局镜头控制
+   *
+   *  CosmicCanvas 是**常驻**组件 —— 它挂在 App 最外层，
+   *  永远不随路由切换而卸载，所以背景星空**绝不中断或重置**。
+   *
+   *  这里通过 cameraRef 控制镜头：
+   *    · 进入星盘 → 镜头推近（zoom 1.25）
+   *    · 其它模块 → 镜头拉回（zoom 1）
+   *    · MBTI 等子面板 → 轻微偏移（pan），星盘留在远景
+   * ============================================================ */
+  const cameraRef = useRef<CosmicCamera>({ ...DEFAULT_CAMERA })
+
   /* ---------- 启动时恢复存档 ---------- */
   useEffect(() => {
     const accountId = getAccountId()
@@ -169,17 +187,28 @@ export default function App() {
     })
   }, [])
 
-  /* ---------- 主题随星座变化（仅主页进入宇宙暗色态） ----------
-   * v3.0：进入主星盘（P6）之前的所有页面一律纯黑白，
-   * 因此只有当路由停在 dashboard 时才注入元素主题。
+  /* ---------- v16.0 · 主题恒为深空 ----------
    *
-   * v9.0：改用**双元素混合主题** —— 太阳给主调、上升给辅调，
-   * 并额外注入 `--el-accent`（核心标题用的独立强调色）。
-   * 「重新开始」时传 null —— 退回纯白底纯黑字。
+   * 旧版：进入主星盘之前是纯黑白纸面，之后才变宇宙暗色 ——
+   *       这就是「视觉割裂」的根源。
+   *
+   * 新版：**全程都是深空**。
+   * 只有元素环境光（accent 色）随星盘变化，
+   * 背景的深空底色与星云始终连续不断。
    */
-  const isDashboard = state.route.name === 'dashboard'
+  /* 元素环境光 —— 有星盘时用元素色，没有时用中性电离蓝 */
+  const cosmosAmbient = useMemo(() => {
+    if (!state.chart) return 'rgba(72,138,199,0.14)'
+    const t = blendedTheme(
+      state.chart.bigThree.sun.sign,
+      state.chart.bigThree.rising.sign,
+    )
+    return t.ambient
+  }, [state.chart])
+
   useEffect(() => {
-    if (!isDashboard || !state.chart) {
+    if (!state.chart) {
+      /* 没有星盘时用中性的恒星金作为强调色 */
       applyElementTheme(null)
       return
     }
@@ -188,7 +217,27 @@ export default function App() {
       state.chart.bigThree.rising.sign,
     )
     applyElementTheme(t.element, t.accent, t.secondary)
-  }, [state.chart, isDashboard])
+  }, [state.chart])
+
+  /* ---------- v16.0 · 镜头随模块推拉 ----------
+   *
+   * 一镜到底的关键：背景不重来，只推镜头。
+   *   dashboard → 推近到星盘（zoom 1.22）
+   *   mbti     → 轻微侧移，星盘留在远景里
+   *   其它     → 拉回默认
+   */
+  useEffect(() => {
+    const stage = state.route.name
+    if (stage === 'dashboard') {
+      cameraRef.current = { zoom: 1.22, panX: 0, panY: 0 }
+    } else if (stage === 'mbti') {
+      cameraRef.current = { zoom: 1.08, panX: -0.04, panY: 0.02 }
+    } else if (stage === 'form') {
+      cameraRef.current = { zoom: 1.1, panX: 0, panY: 0 }
+    } else {
+      cameraRef.current = { ...DEFAULT_CAMERA }
+    }
+  }, [state.route.name])
 
   /* ---------- 存档持久化 ---------- */
   useEffect(() => {
@@ -202,7 +251,7 @@ export default function App() {
     }
   }, [state.chart, state.birth, state.mbti, state.profile])
 
-  /* ---------- 重新开始：退回白底黑字初始态 ---------- */
+  /* ---------- 重新开始：清空数据，镜头拉回 ---------- */
   const handleRestart = useCallback(() => {
     dispatch({
       type: 'setProfile',
@@ -216,6 +265,7 @@ export default function App() {
     })
     dispatch({ type: 'reset' })
     applyElementTheme(null)
+    cameraRef.current = { ...DEFAULT_CAMERA }
   }, [state.profile])
 
   /**
@@ -255,8 +305,16 @@ export default function App() {
       {/* v5.0：全局单屏锁定 —— 物理上杜绝原生滚动条 */}
       <div
         className="relative h-screen w-screen overflow-hidden"
-        data-theme={isDashboard ? 'cosmos' : 'paper'}
+        data-theme="cosmos"
       >
+        {/* ============================================================
+         *  v16.0 · 全局唯一宇宙画布
+         *
+         *  常驻组件 —— 切换模块时**绝不卸载**，
+         *  所以星空不会中断或重置。
+         * ============================================================ */}
+        <CosmicCanvas cameraRef={cameraRef} ambient={cosmosAmbient} />
+
         <AnimatePresence mode="wait">
           {stage === 'intro' && (
             <StageShell key="intro">

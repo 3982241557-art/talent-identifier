@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { Chart, MbtiProfile } from '../../types'
 import { buildSoulPortrait, toSecondPerson } from '../../lib/soul'
+import {
+  VersionToggle,
+  DEFAULT_VERSION,
+  type ReportVersion,
+} from '../common/VersionToggle'
 import { postSoul } from '../../lib/api'
 import { MBTI_TYPES } from '../../data/mbtiTypes'
 import { TypewriterLine } from '../common/TypewriterLine'
@@ -34,6 +39,10 @@ export function VerdictStage({
   /** 本地兜底（永远先算出来，避免闪烁） */
   const fallback = buildSoulPortrait(mbti, chart, place)
   const [text, setText] = useState(fallback.text)
+  /** v16.0：深度版速写（段落），极简版用 text */
+  const [deepText, setDeepText] = useState('')
+  /** v16.0：当前版本 */
+  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
 
   const info = mbti ? MBTI_TYPES[mbti.type] : null
   const tags = fallback.keywords
@@ -49,6 +58,9 @@ export function VerdictStage({
         if (!raw) return
         /* v7.0：第二人称兜底 —— 服务端已转换，这里再保险一次 */
         setText(toSecondPerson(raw))
+        /* v16.0：深度版（可能是多段） */
+        const deep = res.deep?.trim()
+        if (deep) setDeepText(deep)
       } catch {
         /* 保持本地兜底 */
       }
@@ -59,7 +71,7 @@ export function VerdictStage({
   }, [chart, mbti, place])
 
   return (
-    <div className="screen-col bg-paper text-ink">
+    <div className="screen-col">
       <div className="screen-scroll">
         <div className="mx-auto flex w-full max-w-[1000px] flex-col items-center gap-8 px-8 py-8 sm:py-12">
           <motion.p
@@ -77,7 +89,7 @@ export function VerdictStage({
             transition={{ duration: 1.3, delay: 0.15 }}
             className="serif-title t-page text-center text-ink"
           >
-            你的灵魂底色
+            你骨子里是个什么样的人
           </motion.h2>
 
           {/* MBTI 标签 */}
@@ -116,7 +128,7 @@ export function VerdictStage({
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.7, delay: 0.6 + i * 0.09 }}
-                  className="border border-ink/25 bg-transparent px-4 py-2 text-[clamp(0.9375rem,1.1vw,1.35rem)] font-semibold tracking-[0.1em] text-ink"
+                  className="border border-white/12 bg-transparent px-4 py-2 text-[clamp(0.9375rem,1.1vw,1.35rem)] font-semibold tracking-[0.1em] text-ink"
                 >
                   {t}
                 </motion.span>
@@ -124,18 +136,38 @@ export function VerdictStage({
             </motion.div>
           )}
 
-          <span className="block h-px w-full max-w-[760px] bg-ink/12" />
+          <span className="block h-px w-full max-w-[760px] bg-white/10" />
 
-          {/* ---------- 主体：一句话速写 ---------- */}
+          {/* ══════════ v16.0 · 双版本切换胶囊 ══════════ */}
+          {deepText && (
+            <div className="sticky top-3 z-20 mb-8 flex justify-center">
+              <VersionToggle value={version} onChange={setVersion} />
+            </div>
+          )}
+
+          {/* ---------- 主体：速写（极简 / 深度） ---------- */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.5, delay: 0.9, ease: 'easeOut' }}
             className="w-full max-w-[900px] text-center"
           >
-            <p className="serif-body t-lead font-medium text-ink">
-              <TypewriterLine text={text} speed={26} />
-            </p>
+            {version === 'deep' && deepText ? (
+              <div className="space-y-5 text-left">
+                {deepText.split(/\n+/).filter(Boolean).map((line, i) => (
+                  <p
+                    key={i}
+                    className="serif-body text-[clamp(1.05rem,1.2vw,1.4rem)] font-medium leading-[1.85] text-ink-soft"
+                  >
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="serif-body t-lead font-medium text-ink">
+                <TypewriterLine text={text} speed={26} />
+              </p>
+            )}
           </motion.div>
 
           {/* 引导语 */}
@@ -157,7 +189,7 @@ export function VerdictStage({
           >
             <button
               onClick={onContinue}
-              className="group border-0 bg-ink px-14 py-5 text-[clamp(1.375rem,1.75vw,2rem)] font-semibold tracking-[0.22em] text-paper transition-all duration-500 hover:bg-ink/88 hover:shadow-[0_18px_50px_rgba(10,10,10,0.28)] focus:outline-none"
+              className="btn-photon group border-0 rounded-full px-14 py-5 text-[clamp(1.375rem,1.75vw,2rem)] font-semibold tracking-[0.22em] focus:outline-none"
               style={{ boxShadow: '0 10px 34px rgba(10,10,10,0.16)' }}
             >
               看看我的星盘

@@ -163,10 +163,12 @@ export function FormStage({
   }
 
   return (
-    <div className="screen-col bg-paper text-ink">
+    <div className="screen-col">
       {/* ---------- 滚动内容区 ---------- */}
       <div className="screen-scroll">
-        <div className="mx-auto flex w-full max-w-[860px] flex-col gap-9 px-8 py-8 sm:py-12">
+        <div className="mx-auto flex w-full max-w-[860px] flex-col gap-9 px-6 py-8 sm:px-10 sm:py-12">
+          {/* ---------- v16.0 · 深空玻璃壳 ---------- */}
+          <div className="glass-panel flex flex-col gap-9 rounded-[28px] px-6 py-8 sm:px-9 sm:py-10">
           {/* 标题 */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -182,7 +184,7 @@ export function FormStage({
             </p>
           </motion.div>
 
-          <span className="block h-px w-full bg-ink/12" />
+          <span className="block h-px w-full bg-white/10" />
 
           {/* 表单 */}
           <motion.div
@@ -198,7 +200,7 @@ export function FormStage({
               </span>
               <div
                 className="inline-flex w-fit border-0 p-1"
-                style={{ boxShadow: 'inset 0 0 0 1px rgba(10,10,10,0.18)' }}
+                style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)' }}
                 role="tablist"
                 aria-label="历法选择"
               >
@@ -217,7 +219,7 @@ export function FormStage({
                       aria-selected={on}
                       onClick={() => switchCalendar(opt.k)}
                       className={`flex flex-col items-center gap-0.5 border-0 px-7 py-2.5 transition-all duration-500 focus:outline-none ${
-                        on ? 'bg-ink text-paper' : 'bg-transparent text-ink-soft'
+                        on ? 'btn-photon' : 'btn-pulsar'
                       }`}
                     >
                       <span className="text-[clamp(1.0625rem,1.2vw,1.4rem)] font-semibold tracking-[0.16em]">
@@ -246,7 +248,7 @@ export function FormStage({
                     setDate(e.target.value)
                     setError('')
                   }}
-                  className="w-full bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:light]"
+                  className="w-full bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:dark]"
                 />
               ) : (
                 <LunarDatePicker
@@ -312,7 +314,7 @@ export function FormStage({
                     style={
                       gender === g
                         ? undefined
-                        : { boxShadow: 'inset 0 0 0 1px rgba(10,10,10,0.22)' }
+                        : { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)' }
                     }
                   >
                     {GENDER_CN[g]}
@@ -322,7 +324,7 @@ export function FormStage({
             </Field>
 
             {error && (
-              <p className="text-[clamp(1rem,1.15vw,1.35rem)] font-semibold tracking-[0.06em] text-ink/70">
+              <p className="text-[clamp(1rem,1.15vw,1.35rem)] font-semibold tracking-[0.06em] text-ink-soft">
                 {error}
               </p>
             )}
@@ -330,18 +332,19 @@ export function FormStage({
             <div className="flex flex-wrap items-center gap-6 pt-2">
               <button
                 onClick={submit}
-                className="border-0 bg-ink px-8 py-3.5 text-[clamp(1.0625rem,1.25vw,1.45rem)] font-semibold tracking-[0.2em] text-paper transition-opacity duration-500 hover:opacity-85 focus:outline-none"
+                className="btn-photon rounded-full border-0 px-8 py-3.5 text-[clamp(1.0625rem,1.25vw,1.45rem)] font-semibold tracking-[0.2em] focus:outline-none"
               >
                 下一步 →
               </button>
               <button
                 onClick={onBack}
-                className="border-0 bg-transparent pb-1 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.2em] text-ink-mute transition-colors duration-500 hover:text-ink focus:outline-none"
+                className="btn-ghost border-0 pb-1 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.2em] focus:outline-none"
               >
                 返回
               </button>
             </div>
           </motion.div>
+          </div>
         </div>
       </div>
     </div>
@@ -436,7 +439,7 @@ function LunarSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-transparent pb-1.5 text-[clamp(1.25rem,1.45vw,1.75rem)] font-semibold text-ink outline-none [color-scheme:light]"
+        className="bg-transparent pb-1.5 text-[clamp(1.25rem,1.45vw,1.75rem)] font-semibold text-ink outline-none [color-scheme:dark]"
         style={{ minWidth: '4.5em' }}
       >
         {options.map((o) => (
@@ -473,7 +476,7 @@ function TimePicker({
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <div
           className="inline-flex border-0 p-1"
-          style={{ boxShadow: 'inset 0 0 0 1px rgba(10,10,10,0.18)' }}
+          style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)' }}
           role="tablist"
           aria-label="时辰输入方式"
         >
@@ -492,7 +495,7 @@ function TimePicker({
                 aria-selected={on}
                 onClick={() => onModeChange(opt.k)}
                 className={`border-0 px-5 py-1.5 text-[clamp(0.9375rem,1.05vw,1.2rem)] font-semibold tracking-[0.16em] transition-all duration-500 focus:outline-none ${
-                  on ? 'bg-ink text-paper' : 'bg-transparent text-ink-soft'
+                  on ? 'btn-photon' : 'btn-pulsar'
                 }`}
               >
                 {opt.label}
@@ -507,13 +510,13 @@ function TimePicker({
             type="time"
             value={time}
             onChange={(e) => onTimeChange(e.target.value)}
-            className="w-full max-w-[200px] bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:light]"
+            className="w-full max-w-[200px] bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:dark]"
           />
         ) : (
           <select
             value={shichen}
             onChange={(e) => onShichenChange(e.target.value)}
-            className="w-full max-w-[280px] bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:light]"
+            className="w-full max-w-[280px] bg-transparent pb-2 text-[clamp(1.375rem,1.6vw,1.9rem)] font-semibold text-ink outline-none [color-scheme:dark]"
           >
             <option value="">请选择时辰</option>
             {SHICHEN.map((s) => (
@@ -563,7 +566,7 @@ function Field({
       <span className="flex items-baseline gap-3 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.24em] text-ink-soft">
         {label}
         {required && (
-          <span className="text-[clamp(0.8125rem,0.85vw,1rem)] font-medium tracking-[0.16em] text-ink/55">
+          <span className="text-[clamp(0.8125rem,0.85vw,1rem)] font-medium tracking-[0.16em] text-ink-mute">
             必填
           </span>
         )}

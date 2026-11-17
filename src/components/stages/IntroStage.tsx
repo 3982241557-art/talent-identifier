@@ -1,17 +1,26 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { TypewriterLine } from '../common/TypewriterLine'
-import { SocratesPortrait } from '../common/SocratesPortrait'
 import { TutorialDialog } from './TutorialDialog'
 
 /* ============================================================
- *  P1 · 起始页 —— 天赋识别器
+ *  v16.0 · 开场叙事 —— 点击触发的宇宙对话
+ * ============================================================
  *
- *  v5.0：
- *  · 全局单屏锁定：改用 flex + gap 自适应排版，
- *    绝不使用会互相挤压的绝对定位 padding。
- *  · 字号改用 clamp() 弹性刻度（.t-hero / .t-body），
- *    标题与副标题靠 gap 分离，不再重叠。
+ *  【核心变化】
+ *  旧版是一个死板的标题首页 + 苏格拉底对话框 + 按钮。
+ *  新版把用户直接丢进缓缓流动的深空，
+ *  用**点击**推进叙事 —— 每一句都由用户的动作点亮。
+ *
+ *  【四个阶段】
+ *    1. 初见星空   —— 只有一句话浮在中央
+ *    2. 点击       —— 星辰扩散涟漪 + 第一句淡出 + 第二句浮现
+ *    3. 再点击     —— 镜头向深空推进（Warp）+ 出生信息卡浮现
+ *    4. 填写完成   —— 表化作星尘散开，交给 App 切到星盘
+ *
+ *  【与旧版的兼容】
+ *  保留「新手教程」与「读取存档」两个入口 ——
+ *  但它们被收进了右上角的极简角标里，
+ *  不再是开场画面的主角（开场的主角是星空本身）。
  * ============================================================ */
 
 interface IntroStageProps {
@@ -21,10 +30,17 @@ interface IntroStageProps {
   onResume: () => void
 }
 
-const GREETING =
-  '旅人，欢迎来到天赋识别器。我叫苏格拉底。' +
-  '在你踏上星盘之前，我需要先认识你 —— ' +
-  '先告诉我你出生在哪里，然后我们再决定，是直接聊起你的性格，还是让我慢慢问出来。'
+/* ---------- 阶段常量 ---------- */
+type Phase = 'starlight' | 'reveal' | 'warp' | 'form'
+
+/** 阶段一：初见星空 */
+const LINE_1 = '你想看看你出生那一天的星空吗'
+
+/** 阶段二：揭示未来 */
+const LINE_2 = '你知道吗，这片星空能让你看见未来'
+
+/** 阶段三：穿梭至出生时刻 */
+const LINE_3 = '现在，把那一刻交给我'
 
 export function IntroStage({
   onTutorial,
@@ -32,126 +48,205 @@ export function IntroStage({
   hasSaved,
   onResume,
 }: IntroStageProps) {
+  const [phase, setPhase] = useState<Phase>('starlight')
   const [tutorialOpen, setTutorialOpen] = useState(false)
 
+  /* ---------- 点击涟漪 ---------- */
+  const [ripples, setRipples] = useState<
+    Array<{ id: number; x: number; y: number }>
+  >([])
+  const rippleId = useRef(0)
+
+  /* ---------- 阶段推进 ---------- */
+  const advance = useCallback(() => {
+    setPhase((p) => {
+      if (p === 'starlight') return 'reveal'
+      if (p === 'reveal') return 'warp'
+      return p
+    })
+  }, [])
+
+  /**
+   * 阶段三的镜头推进结束后，
+   * 才让「出生信息卡」浮现 —— 让用户先感受到穿梭。
+   */
+  useEffect(() => {
+    if (phase !== 'warp') return
+    const t = setTimeout(() => setPhase('form'), 1500)
+    return () => clearTimeout(t)
+  }, [phase])
+
+  /* ---------- 涟漪 ---------- */
+  const spawnRipple = useCallback((e: React.MouseEvent) => {
+    const id = ++rippleId.current
+    setRipples((r) => [...r, { id, x: e.clientX, y: e.clientY }])
+    setTimeout(() => {
+      setRipples((r) => r.filter((x) => x.id !== id))
+    }, 1600)
+  }, [])
+
+  /* ---------- 键盘可达性 ---------- */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (phase === 'starlight' || phase === 'reveal') {
+          e.preventDefault()
+          advance()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [phase, advance])
+
+  const clickable = phase === 'starlight' || phase === 'reveal'
+
   return (
-    <div className="screen-col bg-paper text-ink">
-      {/* ---------- 大标题：视觉重心上移至屏幕 1/3 处 ---------- */}
-      <motion.header
-        initial={{ opacity: 0, y: -18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1.4, ease: 'easeOut' }}
-        className="screen-fixed flex shrink-0 flex-col items-center gap-5 px-8"
-        style={{ marginTop: 'clamp(2rem, 8vh, 5.5rem)' }}
-      >
-        <h1 className="serif-title t-hero text-ink">天赋识别器</h1>
-        <p className="eyebrow text-ink-mute">TALENT IDENTIFIER</p>
-        <span className="block h-px w-32 bg-ink/18" />
-      </motion.header>
-
-      {/* ---------- 主体：左头像 + 右对话框 ---------- */}
-      <div className="screen-body flex items-center justify-center px-8 py-6">
-        <div className="flex w-full max-w-[1280px] flex-col items-center justify-center gap-10 lg:flex-row lg:items-center lg:gap-16">
-          {/* 苏格拉底 —— 紧贴对话框左侧 */}
+    <div
+      className="screen-col relative"
+      onClick={
+        clickable
+          ? (e) => {
+              spawnRipple(e)
+              advance()
+            }
+          : undefined
+      }
+    >
+      {/* ========== 阶段一 / 二：中央的一句话 ========== */}
+      <AnimatePresence mode="wait">
+        {(phase === 'starlight' || phase === 'reveal') && (
           <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1.8, ease: 'easeOut', delay: 0.3 }}
-            className="flex shrink-0 flex-col items-center"
-          >
-            <div className="relative">
-              <div
-                className="breathe absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-                style={{
-                  background:
-                    'radial-gradient(circle, rgba(10,10,10,0.06) 0%, rgba(255,255,255,0) 68%)',
-                }}
-              />
-              <SocratesPortrait
-                height="clamp(160px,18vh,260px)"
-                className="float-slow relative w-auto lg:h-[clamp(200px,26vh,320px)]"
-                style={{
-                  filter: 'grayscale(0.7) brightness(0.92) contrast(1.08)',
-                  maskImage: 'linear-gradient(to bottom, #000 78%, transparent 100%)',
-                  WebkitMaskImage:
-                    'linear-gradient(to bottom, #000 78%, transparent 100%)',
-                }}
-              />
-            </div>
-            <p className="mt-4 text-center text-[clamp(1.25rem,1.7vw,1.9rem)] font-semibold tracking-[0.2em] text-ink">
-              苏格拉底
-            </p>
-            <p className="mt-1 text-center text-[clamp(0.75rem,0.9vw,1.05rem)] font-medium tracking-[0.24em] text-ink-mute">
-              SOCRATES
-            </p>
-          </motion.div>
-
-          {/* 对话框 */}
-          <motion.div
+            key={phase === 'starlight' ? 'l1' : 'l2'}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.6, ease: 'easeOut', delay: 0.7 }}
-            className="w-full max-w-[720px]"
+            exit={{ opacity: 0, y: -26 }}
+            transition={{ duration: 1.1, ease: 'easeOut' }}
+            className="screen-body flex items-center justify-center px-8"
           >
-            {/* v6.0：放大气泡文字，用更大的字间距 + 行高营造呼吸感 */}
-            <div className="border-l-4 border-ink/25 pl-8">
-              <p
-                className="serif-body font-semibold text-ink"
-                style={{
-                  fontSize: 'clamp(1.5rem, 1.9vw, 2.35rem)',
-                  lineHeight: 1.95,
-                  letterSpacing: '0.08em',
-                }}
-              >
-                <TypewriterLine text={GREETING} speed={42} />
-              </p>
-            </div>
+            <p
+              className="starlight-breathe max-w-[22ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist"
+              style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
+            >
+              {phase === 'starlight' ? LINE_1 : LINE_2}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* 入口按钮 */}
-            <div className="mt-9 flex flex-wrap items-center gap-6">
-              <button
-                onClick={() => {
-                  setTutorialOpen(true)
-                  onTutorial()
-                }}
-                className="border-0 bg-transparent pb-1 text-[clamp(1.0625rem,1.35vw,1.55rem)] font-semibold tracking-[0.2em] text-ink-soft transition-colors duration-500 hover:text-ink focus:outline-none"
-              >
-                新手教程
-              </button>
+      {/* ========== 阶段三：镜头推进 ========== */}
+      {phase === 'warp' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="screen-body flex items-center justify-center px-8"
+        >
+          <p
+            className="starlight-breathe max-w-[20ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist"
+            style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
+          >
+            {LINE_3}
+          </p>
+        </motion.div>
+      )}
 
-              {/* 实体 CTA —— 纯黑底纯白字 */}
+      {/* ========== 阶段四：出生信息卡浮现 ========== */}
+      {phase === 'form' && (
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+          className="screen-body flex items-center justify-center px-8"
+        >
+          <div className="glass-panel w-full max-w-[560px] rounded-[26px] px-10 py-12 text-center">
+            <p className="eyebrow text-gold">YOUR BIRTH</p>
+            <h2 className="serif-title t-sub mt-4 text-mist">
+              告诉我你出生的那一刻
+            </h2>
+            <p className="serif-body t-body mt-4 text-ink-soft">
+              日期、时间、出生地 —— 有多准就填多准，
+              记不清也没关系，先填个大概。
+            </p>
+
+            <div className="mt-9 flex flex-wrap items-center justify-center gap-5">
               <button
                 onClick={onStart}
-                className="group border-0 bg-ink px-8 py-3.5 text-[clamp(1.0625rem,1.35vw,1.55rem)] font-semibold tracking-[0.2em] text-paper transition-all duration-500 hover:bg-ink/85 hover:shadow-[0_10px_30px_rgba(10,10,10,0.22)] focus:outline-none"
+                className="btn-photon rounded-full px-9 py-3.5 text-[clamp(1rem,1.2vw,1.35rem)] font-semibold tracking-[0.16em]"
               >
-                进入探索
-                <span className="ml-3 inline-block transition-transform duration-500 group-hover:translate-x-1">
-                  →
-                </span>
+                开始
               </button>
 
               {hasSaved && (
                 <button
                   onClick={onResume}
-                  className="border-0 bg-transparent pb-1 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-medium tracking-[0.2em] text-ink-mute transition-colors duration-500 hover:text-ink focus:outline-none"
+                  className="btn-pulsar rounded-full px-7 py-3 text-[clamp(0.9375rem,1.05vw,1.2rem)] font-semibold tracking-[0.16em]"
                 >
-                  读取上次存档
+                  读上次的
                 </button>
               )}
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ========== 底部引导 ========== */}
+      <AnimatePresence>
+        {clickable && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="screen-fixed shrink-0 px-8 pb-8 text-center text-[clamp(0.8125rem,0.95vw,1.05rem)] font-medium tracking-[0.28em] text-ink-mute"
+          >
+            <span className="hint-float inline-block">
+              [ 轻触屏幕任意处继续 ]
+            </span>
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {/* ========== 右上角：教程 / 存档（收进角标） ========== */}
+      <div className="screen-fixed absolute right-6 top-6 flex items-center gap-4">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setTutorialOpen(true)
+            onTutorial()
+          }}
+          className="btn-ghost text-[clamp(0.75rem,0.85vw,0.95rem)] tracking-[0.24em]"
+        >
+          教程
+        </button>
+        {hasSaved && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onResume()
+            }}
+            className="btn-ghost text-[clamp(0.75rem,0.85vw,0.95rem)] tracking-[0.24em]"
+          >
+            存档
+          </button>
+        )}
       </div>
 
-      {/* ---------- 底部提示 ---------- */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.4, delay: 1.6 }}
-        className="screen-fixed shrink-0 px-8 pb-6 text-center text-[clamp(0.875rem,1vw,1.15rem)] font-medium tracking-[0.24em] text-ink-mute"
-      >
-        你的资料仅保存在本机 · 刷新不会丢失
-      </motion.p>
+      {/* ========== 点击涟漪 ========== */}
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          className="grav-ripple"
+          style={{
+            left: r.x,
+            top: r.y,
+            width: 340,
+            height: 340,
+            marginLeft: -170,
+            marginTop: -170,
+          }}
+        />
+      ))}
 
       <AnimatePresence>
         {tutorialOpen && (

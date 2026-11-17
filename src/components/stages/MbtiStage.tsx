@@ -332,15 +332,17 @@ export function MbtiStage({
   /* ---------- 分支选择页 ---------- */
   if (view === 'branch') {
     return (
-      <div className="screen-col bg-paper text-ink">
+      <div className="screen-col">
         <PageHeader
           eyebrow="MBTI"
-          title="性格底色"
+          title="看看你骨子里是个什么样的人"
           onBack={onBack}
         />
 
         <div className="screen-scroll">
-          <div className="mx-auto flex w-full max-w-[860px] flex-col gap-10 px-8 py-8 sm:py-12">
+          <div className="mx-auto flex w-full max-w-[860px] flex-col gap-10 px-6 py-8 sm:px-10 sm:py-12">
+            {/* ---------- v16.0 · 深空玻璃壳 ---------- */}
+            <div className="glass-panel flex flex-col gap-10 rounded-[28px] px-6 py-8 sm:px-9 sm:py-10">
             <motion.p
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
@@ -351,17 +353,17 @@ export function MbtiStage({
             </motion.p>
 
             <div className="flex flex-col gap-6">
-              {/* 分支一：已知 MBTI */}
+              {/* 分支一：知道自己的类型 */}
               <motion.button
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 1.1, delay: 0.2 }}
                 onClick={() => onViewChange('manual')}
                 className="group block w-full border-0 bg-transparent p-7 text-left focus:outline-none"
-                style={{ boxShadow: 'inset 0 0 0 1px rgba(10,10,10,0.20)' }}
+                style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.12), 0 18px 46px rgba(0,0,0,0.42)' }}
               >
-                <p className="eyebrow text-ink-mute">OPTION 01</p>
-                <p className="serif-title t-sub mt-3 text-ink">已知 MBTI，直接填写</p>
+                <p className="eyebrow text-ink-mute">选一</p>
+                <p className="serif-title t-sub mt-3 text-ink">我知道自己的 MBTI，直接选</p>
                 <p className="serif-body t-body mt-3 font-medium text-ink-soft">
                   从 16 型人格中选出你确定的那一个，跳过问答。
                 </p>
@@ -370,7 +372,7 @@ export function MbtiStage({
                 </span>
               </motion.button>
 
-              {/* 分支二：未知，开启探索 */}
+              {/* 分支二：不清楚 → 做 20 个快问快答 */}
               <motion.button
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -380,10 +382,10 @@ export function MbtiStage({
                   onViewChange('explore')
                 }}
                 className="group block w-full border-0 bg-transparent p-7 text-left focus:outline-none"
-                style={{ boxShadow: 'inset 0 0 0 1px rgba(10,10,10,0.20)' }}
+                style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.12), 0 18px 46px rgba(0,0,0,0.42)' }}
               >
-                <p className="eyebrow text-ink-mute">OPTION 02</p>
-                <p className="serif-title t-sub mt-3 text-ink">未知，开启探索</p>
+                <p className="eyebrow text-ink-mute">选二</p>
+                <p className="serif-title t-sub mt-3 text-ink">不清楚？做 20 个快问快答测一下</p>
                 <p className="serif-body t-body mt-3 font-medium text-ink-soft">
                   {TOTAL_QUESTIONS} 道很简单的选择题，一分钟点完。
                   凭第一反应选，不用想标准答案。
@@ -392,6 +394,7 @@ export function MbtiStage({
                   开始探索 →
                 </span>
               </motion.button>
+            </div>
             </div>
           </div>
         </div>
@@ -402,7 +405,7 @@ export function MbtiStage({
   /* ---------- 手动填写页 ---------- */
   if (view === 'manual') {
     return (
-      <div className="screen-col bg-paper text-ink">
+      <div className="screen-col">
         <PageHeader
           eyebrow="MBTI · 手动填写"
           title="你的类型"
@@ -413,7 +416,9 @@ export function MbtiStage({
         />
 
         <div className="screen-scroll">
-          <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-8 py-8 sm:py-12">
+          <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-6 py-8 sm:px-10 sm:py-12">
+            {/* ---------- v16.0 · 深空玻璃壳 ---------- */}
+            <div className="glass-panel flex flex-col gap-8 rounded-[28px] px-6 py-8 sm:px-9 sm:py-10">
             {/* 16 型下拉 */}
             <label className="flex flex-col gap-2">
               <span className="text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.24em] text-ink-soft">
@@ -426,7 +431,7 @@ export function MbtiStage({
                     patch({ manualType: e.target.value })
                     setError('')
                   }}
-                  className="w-full bg-transparent pb-3 text-[clamp(1.375rem,1.7vw,2rem)] font-semibold text-ink outline-none [color-scheme:light]"
+                  className="w-full bg-transparent pb-3 text-[clamp(1.375rem,1.7vw,2rem)] font-semibold text-ink outline-none [color-scheme:dark]"
                 >
                   <option value="">请选择</option>
                   {MBTI_TYPE_LIST.map((t) => (
@@ -473,7 +478,7 @@ export function MbtiStage({
             )}
 
             {error && (
-              <p className="text-[clamp(1rem,1.15vw,1.35rem)] font-semibold tracking-[0.06em] text-ink/70">
+              <p className="text-[clamp(1rem,1.15vw,1.35rem)] font-semibold tracking-[0.06em] text-ink-soft">
                 {error}
               </p>
             )}
@@ -482,7 +487,7 @@ export function MbtiStage({
               <button
                 onClick={handleManual}
                 disabled={!session.manualType}
-                className="border-0 bg-ink px-8 py-3.5 text-[clamp(1.0625rem,1.25vw,1.45rem)] font-semibold tracking-[0.2em] text-paper transition-opacity duration-500 hover:opacity-85 focus:outline-none disabled:opacity-35"
+                className="btn-photon border-0 rounded-full px-8 py-3.5 text-[clamp(1.0625rem,1.25vw,1.45rem)] font-semibold tracking-[0.2em] focus:outline-none disabled:opacity-35"
               >
                 就用它
               </button>
@@ -491,10 +496,11 @@ export function MbtiStage({
                   patch({ question: null })
                   onViewChange('explore')
                 }}
-                className="border-0 bg-transparent pb-1 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.2em] text-ink-mute transition-colors duration-500 hover:text-ink focus:outline-none"
+                className="btn-ghost border-0 pb-1 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.2em] focus:outline-none"
               >
                 其实我也不知道，还是问答 →
               </button>
+            </div>
             </div>
           </div>
         </div>
@@ -506,7 +512,7 @@ export function MbtiStage({
   const currentAxis: MbtiAxis = AXIS_CYCLE[index % AXIS_CYCLE.length]
 
   return (
-    <div className="screen-col bg-paper text-ink">
+    <div className="screen-col">
       {/* 顶部：标题 + 进度 */}
       <header className="screen-fixed flex shrink-0 flex-col gap-4 px-8 pt-8 sm:pt-10">
         <div className="mx-auto flex w-full max-w-[1200px] items-end justify-between gap-6">
@@ -541,9 +547,9 @@ export function MbtiStage({
           </div>
         </div>
         {/* 进度条 */}
-        <div className="mx-auto h-px w-full max-w-[1200px] bg-ink/12">
+        <div className="mx-auto h-px w-full max-w-[1200px] bg-white/10">
           <motion.div
-            className="h-px bg-ink/70"
+            className="h-px bg-gold"
             animate={{
               width: `${((index + (finished ? 1 : 0)) / TOTAL_QUESTIONS) * 100}%`,
             }}
@@ -567,14 +573,14 @@ export function MbtiStage({
                 className="breathe absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
                   background:
-                    'radial-gradient(circle, rgba(10,10,10,0.06) 0%, rgba(255,255,255,0) 68%)',
+                    'radial-gradient(circle, rgba(124,224,249,0.16) 0%, rgba(255,255,255,0) 68%)',
                 }}
               />
               <SocratesPortrait
                 height="clamp(150px,17vh,230px)"
                 className="float-slow relative w-auto lg:h-[clamp(190px,24vh,300px)]"
                 style={{
-                  filter: 'grayscale(0.7) brightness(0.92) contrast(1.08)',
+                  filter: 'grayscale(0.35) brightness(1.16) contrast(1.05) drop-shadow(0 0 24px rgba(124,224,249,0.28))',
                   maskImage: 'linear-gradient(to bottom, #000 78%, transparent 100%)',
                   WebkitMaskImage:
                     'linear-gradient(to bottom, #000 78%, transparent 100%)',
@@ -589,8 +595,8 @@ export function MbtiStage({
             </p>
           </motion.div>
 
-          {/* 对话区 */}
-          <div className="w-full max-w-[720px]">
+          {/* 对话区 —— v16.0：深空玻璃卡片 */}
+          <div className="glass-panel w-full max-w-[720px] rounded-[26px] px-7 py-8 sm:px-10 sm:py-10">
             {/* v7.0：mode="wait" → mode="popLayout"
                 旧版在 wait 模式下，exit 动画期间新块完全不渲染，
                 加上 key 抖动就成了「闪一下消失」；
@@ -603,7 +609,7 @@ export function MbtiStage({
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className="border-l-4 border-ink/25 pl-7"
+                  className="border-l-4 border-white/12 pl-7"
                 >
                   <p className="serif-body t-lead font-medium text-ink">
                     <TypewriterLine text={CLOSING} speed={38} />
@@ -615,7 +621,7 @@ export function MbtiStage({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="border-l-4 border-ink/25 pl-7"
+                  className="border-l-4 border-white/12 pl-7"
                 >
                   {/* v11.0：只在「换一道问法」时出现 */}
                   <div className="flex items-center gap-3">
@@ -648,7 +654,7 @@ export function MbtiStage({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -12 }}
                   transition={{ duration: 0.75, ease: 'easeOut' }}
-                  className="border-l-4 border-ink/25 pl-7"
+                  className="border-l-4 border-white/12 pl-7"
                 >
                   {/* 倾听反馈 */}
                   {(question.bridge || index === 0) && (
@@ -662,7 +668,7 @@ export function MbtiStage({
 
                   {/* v6.0：降级到本地题库时的轻提示（不打断流程） */}
                   {degraded && (
-                    <p className="mb-3 inline-flex items-center gap-2 border border-ink/15 px-3 py-1.5 text-[clamp(0.75rem,0.8vw,0.9rem)] font-semibold tracking-[0.1em] text-ink/50">
+                    <p className="mb-3 inline-flex items-center gap-2 border border-white/10 px-3 py-1.5 text-[clamp(0.75rem,0.8vw,0.9rem)] font-semibold tracking-[0.1em] text-ink/50">
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink/40" />
                       云端暂不可用 · 用的是本地题库
                     </p>
@@ -700,7 +706,7 @@ export function MbtiStage({
                           style={{
                             boxShadow: isPicked
                               ? 'inset 0 0 0 1.5px rgba(10,10,10,0.55)'
-                              : 'inset 0 0 0 1px rgba(10,10,10,0.18)',
+                              : 'inset 0 0 0 1px rgba(255,255,255,0.16)',
                             background: isPicked
                               ? 'rgba(10,10,10,0.05)'
                               : 'transparent',
@@ -729,7 +735,7 @@ export function MbtiStage({
                               initial={{ opacity: 0, scale: 0.7 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ duration: 0.4, delay: 0.08 }}
-                              className="ml-auto shrink-0 self-center text-[clamp(0.75rem,0.8vw,0.9rem)] font-bold tracking-[0.2em] text-ink/55"
+                              className="ml-auto shrink-0 self-center text-[clamp(0.75rem,0.8vw,0.9rem)] font-bold tracking-[0.2em] text-ink-mute"
                             >
                               已记下
                             </motion.span>
@@ -744,9 +750,9 @@ export function MbtiStage({
                   key="error"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="border-l-4 border-ink/25 pl-7"
+                  className="border-l-4 border-white/12 pl-7"
                 >
-                  <p className="serif-body t-body font-medium text-ink/70">
+                  <p className="serif-body t-body font-medium text-ink-soft">
                     {error || '这一题没能顺利问出来。'}
                   </p>
                   <button

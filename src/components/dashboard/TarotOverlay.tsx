@@ -13,6 +13,11 @@ import {
 } from '../../lib/tarot'
 import { todayKey } from '../../lib/storage'
 import { postTarotReading } from '../../lib/api'
+import {
+  VersionToggle,
+  DEFAULT_VERSION,
+  type ReportVersion,
+} from '../common/VersionToggle'
 
 /* ============================================================
  *  塔罗抽牌交互（v8.0）
@@ -89,6 +94,8 @@ export function TarotOverlay({
   const [cards, setCards] = useState<TarotCard[]>([])
   /** v8.0：三段式解析 */
   const [reading, setReading] = useState<TarotReading | null>(null)
+  /** v16.0：极简 / 深度 切换 */
+  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
   const [readingLoading, setReadingLoading] = useState(false)
   /** v8.0：聚光灯状态 */
   const [focus, setFocus] = useState<FocusState | null>(null)
@@ -173,6 +180,9 @@ export function TarotOverlay({
           gist: res.gist || drawnCard.meaning,
           action: res.action || drawnCard.tip,
           degraded: res.degraded,
+          /* v16.0：双版本一并带过来 */
+          minimal: res.minimal,
+          deep: res.deep,
         })
       })
       .catch(() => {
@@ -355,6 +365,8 @@ export function TarotOverlay({
                 card={focusedCard}
                 reading={reading}
                 loading={readingLoading}
+                version={version}
+                onVersionChange={setVersion}
               />
             </motion.div>
           </>
@@ -466,6 +478,8 @@ export function TarotOverlay({
               card={shownCard}
               reading={reading}
               loading={readingLoading}
+              version={version}
+              onVersionChange={setVersion}
             />
           </div>
         )}
@@ -594,13 +608,34 @@ function ReadingPanel({
   card,
   reading,
   loading,
+  version,
+  onVersionChange,
 }: {
   card: TarotCard
   reading: TarotReading | null
   loading: boolean
+  version?: ReportVersion
+  onVersionChange?: (v: ReportVersion) => void
 }) {
+  /* v16.0：取当前版本的内容 */
+  const v = version ?? DEFAULT_VERSION
+  const src =
+    v === 'minimal'
+      ? (reading?.minimal ?? reading)
+      : (reading?.deep ?? reading)
+
+  const hasBoth =
+    Boolean(reading?.minimal) && Boolean(reading?.deep)
+
   return (
     <div className="flex w-full max-w-[640px] flex-col items-center text-center">
+      {/* ══════════ v16.0 · 双版本切换胶囊 ══════════ */}
+      {hasBoth && onVersionChange && (
+        <div className="sticky top-2 z-20 mb-6 flex justify-center">
+          <VersionToggle value={v} onChange={onVersionChange} />
+        </div>
+      )}
+
       {/* ---------- 牌名 ---------- */}
       <h4
         className="serif-title text-[clamp(1.75rem,2.6vw,2.75rem)] font-semibold tracking-[0.16em]"
@@ -614,7 +649,7 @@ function ReadingPanel({
 
       {/* ---------- 一句点题 ---------- */}
       <p className="serif-body mt-3 text-[clamp(1.0625rem,1.2vw,1.375rem)] font-medium leading-[1.7] text-mist/80">
-        {reading?.gist ?? card.meaning}
+        {src?.gist ?? card.meaning}
       </p>
 
       {/* ---------- 分割线 ---------- */}
@@ -633,8 +668,8 @@ function ReadingPanel({
         今 日 一 件 小 事
       </p>
       <p className="serif-body mt-2.5 text-[clamp(1.0625rem,1.25vw,1.5rem)] font-semibold leading-[1.72] text-mist">
-        {reading
-          ? reading.action
+        {src
+          ? src.action
           : loading
             ? '正在为你挑一件小事……'
             : card.tip}

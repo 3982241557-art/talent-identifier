@@ -34,7 +34,7 @@ export function Starfield({ density = 90, className = '', children }: StarfieldP
         {stars.map((s, i) => (
           <span
             key={i}
-            className="absolute rounded-full bg-white"
+            className="absolute rounded-full bg-[#f4f6fa]"
             style={{
               left: s.left,
               top: s.top,

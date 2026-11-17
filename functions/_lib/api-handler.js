@@ -31,13 +31,16 @@ import {
   describeChart,
   describeMbti,
   buildQuestionPrompt,
-  SOUL_PORTRAIT_SYSTEM_PROMPT,
-  TAROT_READING_SYSTEM_PROMPT,
+  TALENT_DUAL_SYSTEM_PROMPT,
+  SOUL_DUAL_SYSTEM_PROMPT,
+  FORTUNE_DUAL_SYSTEM_PROMPT,
+  TAROT_DUAL_SYSTEM_PROMPT,
   describeSoulMaterial,
   normalizeSoulPortrait,
   hasAstroTerms,
   stripAstroTerms,
 } from '../../server/prompt.mjs'
+import { sanitize } from '../../server/sanitize.mjs'
 import { pickFallbackQuestion } from '../../server/mbtiFallback.mjs'
 import {
   DOMAINS,
@@ -74,6 +77,40 @@ function json(data, status = 200) {
 }
 
 /** 宽松的 JSON 解析 —— 模型经常在 JSON 外面包一层说明文字 */
+/**
+ * v16.0 · 双版本规范化。
+ *
+ * 后端一次返回两份（minimal / deep），
+ * 前端切换时只换数据、不发请求 —— 0 延迟秒切。
+ *
+ * @param parsed      AI 返回的 JSON
+ * @param fallbackMin 极简版兜底
+ * @param fallbackDeep 深度版兜底
+ */
+export function normalizeDual(parsed, fallbackMin, fallbackDeep) {
+  const p = parsed && typeof parsed === 'object' ? parsed : {}
+  const pick = (v, fb) => {
+    if (typeof v === 'string' && v.trim()) return sanitize(v)
+    if (Array.isArray(v) && v.length) {
+      return v.map((x) => sanitize(String(x ?? ''))).filter(Boolean)
+    }
+    if (v && typeof v === 'object') return v
+    return fb
+  }
+  return {
+    minimal: pick(p.minimal, fallbackMin),
+    deep: pick(p.deep, fallbackDeep),
+  }
+}
+
+/**
+ * v16.0 · 后处理：把 AI 结果里的违禁句式与术语全部洗掉。
+ * 这是 Prompt 之外的第二道防线。
+ */
+export function scrub(text) {
+  return sanitize(text)
+}
+
 export function parseJson(text) {
   if (typeof text !== 'string') return null
   let cleaned = text.trim()
@@ -163,7 +200,8 @@ export async function handleApi(context) {
           timeout: 55_000,
           retries: 1,
         })
-        return json({ reply })
+        /* v16.0：返回前洗掉违禁句式与术语（Prompt 之外的第二道防线） */
+        return json({ reply: scrub(reply) })
       } catch (err) {
         return json(
           { error: err?.message ?? '与智者的对话中断了。', code: err?.code ?? 'unknown' },
@@ -189,7 +227,7 @@ export async function handleApi(context) {
           ],
           { temperature: 0.95, maxTokens: 120, timeout: 40_000 },
         )
-        return json({ reflection: raw.trim().slice(0, 120) })
+        return json({ reflection: scrub(raw.trim().slice(0, 120)) })
       } catch (err) {
         return json(
           { error: err?.message ?? '反思中断了。', code: err?.code ?? 'unknown' },
@@ -349,7 +387,7 @@ export async function handleApi(context) {
         '严格只输出 JSON，不要任何解释文字或 markdown 代码块。',
         '',
         '输出格式：',
-        '{"categories":[{"key":"career","label":"事业","score":78,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"academic","label":"学业","score":82,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"interpersonal","label":"人际","score":74,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"wealth","label":"财富","score":70,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."}],"yearly":[{"year":2026,"focus":"...","action":"..."}],"advice":["...","...","...","..."]}',
+        '{"categories":[{"key":"career","label":"事业","score":78,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"academic","label":"学业","score":82,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"interpersonal","label":"人际","score":74,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."},{"key":"wealth","label":"财富","score":70,"title":"...","subtitle":"...","field":"...","description":"...","quote":"...","quoteSource":"...","quoteModern":"...","quoteScene":"...","strength":"...","practice":"..."}],"yearly":[{"year":2026,"focus":"...","action":"..."}],"advice":["...","...","...","..."],"minimal":["...","...","...","...","..."],"deep":["...","...","...","...","..."]}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -358,23 +396,59 @@ export async function handleApi(context) {
         const raw = await callDeepSeekWorkers(
           env,
           [
-            {
-              role: 'system',
-              content:
-                '你是一位文字编辑。你的工作**不是**创作，而是把人类写过的句子与读者连起来。' +
-                '给定的经典原句、白话转写、表现与角色定义都是人写的，必须原样保留。' +
-                '你只补一两句温和的第二人称连接，绝不自己另写一段替代它们。' +
-                '四个领域的内容必须彻底不同。只输出严格 JSON。',
-            },
+            { role: 'system', content: TALENT_DUAL_SYSTEM_PROMPT },
             { role: 'user', content: prompt },
           ],
-          { temperature: 0.55, maxTokens: 1400, timeout: 55_000 },
+          { temperature: 0.6, maxTokens: 2600, timeout: 55_000 },
         )
         const parsed = parseJson(raw)
         if (!parsed) {
-          return json({ error: '模型返回内容无法解析为 JSON。' }, 502)
+          return json({ error: '模型返回的内容看不懂。' }, 502)
         }
-        return json(normalizeTalentPayload(parsed, packs, DOMAINS))
+
+        /* ============================================================
+         *  v16.0 · 双版本
+         *
+         *  categories（四个领域的详细解析）保持原样，
+         *  另外补上 minimal（3-5 条短句）与 deep（3-5 段话）。
+         *  前端切换时只换 minimal/deep 的显示，categories 始终在。
+         * ============================================================ */
+        const base = normalizeTalentPayload(parsed, packs, DOMAINS)
+
+        const asList = (v) => {
+          if (Array.isArray(v)) {
+            return v.map((x) => scrub(String(x ?? ''))).filter(Boolean)
+          }
+          if (typeof v === 'string' && v.trim()) {
+            return v
+              .split(/\n+/)
+              .map((x) => scrub(x))
+              .filter(Boolean)
+          }
+          return []
+        }
+
+        const minimalList = asList(parsed.minimal)
+        const deepList = asList(parsed.deep)
+
+        /* 缺哪版用另一版顶上，保证切换永远有内容 */
+        const fbMinimal = [
+          '你讲故事天生抓得住人',
+          '适合做需要你出面牵头的事',
+          '别把话憋在心里太久',
+        ]
+        const fbDeep = [
+          '你跟人说话时总能把复杂的事讲明白,这是练出来的本能,不是刻意。',
+          '挑准了事你就一头扎进去,别人说你轴,你其实只是不愿意将就。',
+          '你最容易在哪儿卡住 —— 是不肯开口求助,总想自己扛完。',
+          '往长远看,你的路子在「把事做到别人替代不了」的那一端。',
+        ]
+
+        return json({
+          ...base,
+          minimal: minimalList.length ? minimalList : fbMinimal,
+          deep: deepList.length ? deepList : fbDeep,
+        })
       } catch (err) {
         return json({ error: err?.message ?? '天赋测算中断了。' }, err?.statusCode ?? 500)
       }
@@ -386,25 +460,52 @@ export async function handleApi(context) {
     if (path === '/api/soul') {
       const { chart, mbti, place } = body
       const material = describeSoulMaterial(chart, mbti, place)
-      const prompt = [
-        '请依据下面的写作素材，为这位旅人写一句「灵魂底色」。',
-        '',
-        '务必严格遵守 System Prompt 中的输出格式：只输出一句话，50-80 字，不换行。',
-        '',
-        material,
-      ]
         .filter(Boolean)
         .join('\n')
 
       try {
+        /* ============================================================
+         *  v16.0 · 双版本：一次调用返回极简版 + 深度版
+         * ============================================================ */
+        const dualPrompt = [
+          '请依据下面的写作素材，为这位旅人写一段速写。',
+          '按 System Prompt 的要求，同时给出 minimal 与 deep 两个版本。',
+          '',
+          material,
+        ]
+          .filter(Boolean)
+          .join('\n')
+
         const raw = await callDeepSeekWorkers(
           env,
           [
-            { role: 'system', content: SOUL_PORTRAIT_SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
+            { role: 'system', content: SOUL_DUAL_SYSTEM_PROMPT },
+            { role: 'user', content: dualPrompt },
           ],
-          { temperature: 0.95, maxTokens: 220, timeout: 50_000, retries: 1 },
+          { temperature: 0.95, maxTokens: 700, timeout: 50_000, retries: 1 },
         )
+
+        const parsed = parseJson(raw)
+
+        if (parsed && (parsed.minimal || parsed.deep)) {
+          const dual = normalizeDual(
+            parsed,
+            '你慢热，熟了之后比谁都重感情。',
+            '你跟谁都客气三分，熟起来却能给到底。\n\n刚认识你的人会觉得你有点距离感。你只是还没决定要不要认真。\n\n挑准了人你会特别护短，值得你花时间的事你从不嫌慢。',
+          )
+          /* 极简版额外做一次长度与术语校验 */
+          if (typeof dual.minimal === 'string' && hasAstroTerms(dual.minimal)) {
+            const stripped = stripAstroTerms(dual.minimal)
+            if (stripped.length >= 20) dual.minimal = stripped
+          }
+          return json({
+            text: dual.minimal,
+            minimal: dual.minimal,
+            deep: dual.deep,
+          })
+        }
+
+        /* ---------- 降级：只拿到一句话（单版本） ---------- */
         let text = normalizeSoulPortrait(raw)
         if (hasAstroTerms(text)) {
           const stripped = stripAstroTerms(text)
@@ -412,11 +513,11 @@ export async function handleApi(context) {
         }
         if (!text) {
           return json(
-            { error: '模型未返回可用的灵魂底色。', code: 'malformed' },
+            { error: '模型没有给出可用的速写。', code: 'malformed' },
             502,
           )
         }
-        return json({ text })
+        return json({ text, minimal: text, deep: text })
       } catch (err) {
         return json(
           { error: err?.message ?? '灵魂底色生成中断了。', code: err?.code ?? 'unknown' },
@@ -458,8 +559,8 @@ export async function handleApi(context) {
         )
         const parsed = parseJson(raw)
         return json({
-          tip: parsed?.tip ?? '今天适合做一件小事。',
-          action: parsed?.action ?? '只做十五分钟。',
+          tip: scrub(parsed?.tip ?? '今天适合做一件小事。'),
+          action: scrub(parsed?.action ?? '只做十五分钟。'),
         })
       } catch (err) {
         return json(
@@ -478,7 +579,7 @@ export async function handleApi(context) {
         const raw = await callDeepSeekWorkers(
           env,
           [
-            { role: 'system', content: TAROT_READING_SYSTEM_PROMPT },
+            { role: 'system', content: TAROT_DUAL_SYSTEM_PROMPT },
             {
               role: 'user',
               content: [
@@ -492,20 +593,44 @@ export async function handleApi(context) {
                 .join('\n'),
             },
           ],
-          { temperature: 0.9, maxTokens: 900, timeout: 50_000 },
+          { temperature: 0.9, maxTokens: 1400, timeout: 50_000 },
         )
         const parsed = parseJson(raw)
-        if (!parsed || !Array.isArray(parsed.cards)) {
-          return json({ cards: [], gist: '', action: '' })
+
+        /* ---------- 牌面信息（两版共用） ---------- */
+        const cards = Array.isArray(parsed?.cards)
+          ? parsed.cards.map((c) => ({
+              name: c?.name ?? '',
+              upright: c?.upright !== false,
+              meaning: scrub(c?.meaning ?? ''),
+            }))
+          : []
+
+        /* ============================================================
+         *  v16.0 · 双版本
+         * ============================================================ */
+        const pickVersion = (v, fb) => {
+          if (!v || typeof v !== 'object') return fb
+          const gist = typeof v.gist === 'string' && v.gist.trim() ? scrub(v.gist) : fb.gist
+          const action =
+            typeof v.action === 'string' && v.action.trim() ? scrub(v.action) : fb.action
+          return { gist, action }
         }
+
+        const fb = {
+          gist: '有件事正在悄悄改变你的节奏。',
+          action: '今天挑一件小事把它做完。',
+        }
+
+        const minimal = pickVersion(parsed?.minimal, fb)
+        const deep = pickVersion(parsed?.deep, minimal)
+
         return json({
-          cards: parsed.cards.map((c) => ({
-            name: c?.name ?? '',
-            upright: c?.upright !== false,
-            meaning: c?.meaning ?? '',
-          })),
-          gist: parsed.gist ?? '',
-          action: parsed.action ?? '',
+          cards,
+          gist: minimal.gist,
+          action: minimal.action,
+          minimal,
+          deep,
         })
       } catch (err) {
         return json(
@@ -568,7 +693,7 @@ export async function handleApi(context) {
         describeMbti(mbti),
         '',
         '只输出 JSON，格式：',
-        '{"overview":"...","dimensions":[{"key":"career","label":"事业 / 学业","summary":"...","trend":"...","warning":"..."},{"key":"wealth","label":"财富","summary":"...","trend":"...","warning":"..."},{"key":"health","label":"健康","summary":"...","trend":"...","warning":"..."},{"key":"love","label":"爱情","summary":"...","trend":"...","warning":"..."}]}',
+        '{"minimal":{"overview":"...","dimensions":[{"key":"career","label":"事业 / 学业","summary":"...","trend":"...","warning":"..."},{"key":"wealth","label":"财富","summary":"...","trend":"...","warning":"..."},{"key":"health","label":"健康","summary":"...","trend":"...","warning":"..."},{"key":"love","label":"爱情","summary":"...","trend":"...","warning":"..."}]},"deep":{"overview":"...","dimensions":[{"key":"career","label":"事业 / 学业","summary":"...","trend":"...","warning":"..."},{"key":"wealth","label":"财富","summary":"...","trend":"...","warning":"..."},{"key":"health","label":"健康","summary":"...","trend":"...","warning":"..."},{"key":"love","label":"爱情","summary":"...","trend":"...","warning":"..."}]}}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -577,31 +702,69 @@ export async function handleApi(context) {
         const raw = await callDeepSeekWorkers(
           env,
           [
-            {
-              role: 'system',
-              content:
-                '你是一位生活观察者。只描述生活层面会发生什么，不做吉凶断语，' +
-                '不出现任何占星术语。只输出严格 JSON。',
-            },
+            { role: 'system', content: FORTUNE_DUAL_SYSTEM_PROMPT },
             { role: 'user', content: prompt },
           ],
-          { temperature: 0.8, maxTokens: 1200, timeout: 50_000 },
+          { temperature: 0.8, maxTokens: 2400, timeout: 50_000 },
         )
         const parsed = parseJson(raw)
+
+        /* ============================================================
+         *  v16.0 · 双版本规范化
+         *
+         *  两个版本的 dimensions 结构**必须一致** ——
+         *  这样前端切换时只是换数据，布局完全不动。
+         * ============================================================ */
+        const shape = (v) => {
+          if (!v || typeof v !== 'object') return null
+          if (!Array.isArray(v.dimensions)) return null
+          return {
+            overview: scrub(typeof v.overview === 'string' ? v.overview : ''),
+            dimensions: v.dimensions.map((d) => ({
+              key: d?.key ?? '',
+              label: d?.label ?? '',
+              summary: scrub(d?.summary ?? ''),
+              trend: scrub(d?.trend ?? ''),
+              warning: scrub(d?.warning ?? ''),
+            })),
+          }
+        }
+
+        const minShape = shape(parsed?.minimal)
+        const deepShape = shape(parsed?.deep)
+
+        if (minShape || deepShape) {
+          /* 缺哪一版就用另一版顶上，保证切换时永远有内容 */
+          const fallback = minShape ?? deepShape
+          return json({
+            scope,
+            label: guide.label,
+            ...fallback,
+            minimal: minShape ?? fallback,
+            deep: deepShape ?? fallback,
+          })
+        }
+
+        /* ---------- 降级：单版本结构 ---------- */
         if (!parsed || !Array.isArray(parsed.dimensions)) {
-          return json({ error: '模型返回内容无法解析为 JSON。' }, 502)
+          return json({ error: '模型返回的内容看不懂。' }, 502)
+        }
+        const single = {
+          overview: scrub(typeof parsed.overview === 'string' ? parsed.overview : ''),
+          dimensions: parsed.dimensions.map((d) => ({
+            key: d?.key ?? '',
+            label: d?.label ?? '',
+            summary: scrub(d?.summary ?? ''),
+            trend: scrub(d?.trend ?? ''),
+            warning: scrub(d?.warning ?? ''),
+          })),
         }
         return json({
           scope,
           label: guide.label,
-          overview: typeof parsed.overview === 'string' ? parsed.overview : '',
-          dimensions: parsed.dimensions.map((d) => ({
-            key: d?.key ?? '',
-            label: d?.label ?? '',
-            summary: d?.summary ?? '',
-            trend: d?.trend ?? '',
-            warning: d?.warning ?? '',
-          })),
+          ...single,
+          minimal: single,
+          deep: single,
         })
       } catch (err) {
         return json(

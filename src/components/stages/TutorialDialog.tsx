@@ -80,14 +80,14 @@ export function TutorialDialog({ onClose }: TutorialDialogProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.98 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
-        className="thin-scroll max-h-[84vh] w-[min(760px,92vw)] overflow-y-auto bg-paper px-8 py-9 sm:px-12"
+        className="glass-panel-solid thin-scroll max-h-[84vh] w-[min(760px,92vw)] overflow-y-auto rounded-[26px] px-8 py-9 sm:px-12"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-[clamp(0.875rem,1vw,1.125rem)] font-semibold tracking-[0.42em] text-ink-mute">
           TUTORIAL
         </p>
         <h2 className="serif-title t-page mt-3 text-ink">新手教程</h2>
-        <span className="mt-5 block h-px w-full bg-ink/12" />
+        <span className="mt-5 block h-px w-full bg-white/10" />
 
         <div className="mt-7 flex flex-col gap-7">
           {SECTIONS.map((s, i) => (
@@ -109,7 +109,7 @@ export function TutorialDialog({ onClose }: TutorialDialogProps) {
         <div className="mt-9 flex justify-end">
           <button
             onClick={onClose}
-            className="border-0 bg-ink px-7 py-3 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.22em] text-paper transition-opacity duration-500 hover:opacity-85 focus:outline-none"
+            className="btn-photon border-0 rounded-full px-7 py-3 text-[clamp(0.9375rem,1.05vw,1.25rem)] font-semibold tracking-[0.22em] focus:outline-none"
           >
             我明白了 →
           </button>
