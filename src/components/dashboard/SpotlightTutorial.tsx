@@ -284,6 +284,22 @@ export function SpotlightTutorial({
     return rects.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a))
   }, [rects])
 
+  /**
+   * 浏览器是否支持 `clip-path: path(evenodd, ...)`。
+   *
+   * 不支持时退回旧方案：遮罩层不吃点击（pointerEvents: none），
+   * 只保留 SVG 层的视觉挖空 —— 此时用户必须用「下一步」/「跳过」推进，
+   * 但绝不会出现「按钮点不动」的错觉。
+   */
+  const [supportsClipPath, setSupportsClipPath] = useState(true)
+  useEffect(() => {
+    setSupportsClipPath(
+      typeof CSS !== 'undefined' &&
+        CSS.supports?.('clip-path', 'path(evenodd, "M 0 0 H 1 V 1 H 0 Z")') ===
+          true,
+    )
+  }, [])
+
   if (active === null) return null
 
   return (
@@ -322,10 +338,32 @@ export function SpotlightTutorial({
       </svg>
 
       {/* 遮罩层本身要能接收点击（关闭） */}
+      {/*
+        v17.2 修复：原来这里是 `pointerEvents: 'auto'` 的整屏 div。
+        它在**视觉上**把被讲解的区域挖空了（SVG mask），
+        但在**点击层面**仍然是实心的 ——
+        于是被聚光灯照亮的那个按钮点不动，
+        用户只能反复点「下一步」或「跳过」，体验像卡死。
+
+        现在改用 `clip-path: path(evenodd, ...)`：
+        evenodd 填充规则下，外框矩形减去所有洞 = 遮罩的**实际形状**。
+        洞里的区域**不再属于遮罩**，所以：
+          · 洞里的按钮 → 点击直接穿透到下面的真实元素 ✓
+          · 洞外的区域 → 仍然吃到遮罩的 onClick(关闭) ✓
+
+        背景色仍由上面的 SVG <rect> 负责（带 mask 真挖空），
+        这里只做点击层 —— 避免两层半透明叠加把画面压得过暗。
+      */}
       <div
         className="absolute inset-0"
         onClick={finish}
-        style={{ pointerEvents: 'auto' }}
+        style={{
+          pointerEvents: supportsClipPath ? 'auto' : 'none',
+          clipPath:
+            supportsClipPath && cutoutPaths.length > 0
+              ? `path(evenodd, "M 0 0 H ${vw} V ${vh} H 0 Z ${cutoutPaths.join(' ')}")`
+              : undefined,
+        }}
       />
 
       {/* ============================================================
