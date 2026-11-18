@@ -45,7 +45,7 @@ const root = resolve(here, '..')
  * ============================================================ */
 
 /** 执行一条命令，继承 stdio */
-function run(command, args, label) {
+function run(command, args, label, envOverride) {
   console.log(`\n[build] ${label}：${command} ${args.join(' ')}`)
   const result = spawnSync(command, args, {
     cwd: root,
@@ -59,6 +59,7 @@ function run(command, args, label) {
        * 这一条命令也会把 typescript / vite 装上。
        */
       NODE_ENV: 'development',
+      ...envOverride,
     },
   })
   if (result.status !== 0) {
@@ -99,14 +100,14 @@ function hasBin(name) {
  *
  * 直接执行 node_modules/.bin/ 下的脚本，行为完全确定。
  */
-function runLocalBin(name, args, label) {
+function runLocalBin(name, args, label, envOverride) {
   const bin = resolve(root, 'node_modules', '.bin', name)
   if (existsSync(bin)) {
-    run(bin, args, label)
+    run(bin, args, label, envOverride)
     return
   }
   /* 本地没有就用 npx（此时 npx 会命中已安装的包，不至于下载废弃包） */
-  run('npx', ['--no-install', name, ...args], label)
+  run('npx', ['--no-install', name, ...args], label, envOverride)
 }
 
 /* ============================================================
@@ -203,8 +204,38 @@ runLocalBin('tsc', ['-b'], 'TypeScript 类型检查')
 
 /* ============================================================
  *  4 · 构建前端
- * ============================================================ */
-runLocalBin('vite', ['build'], 'Vite 构建')
+ * ============================================================
+ *
+ *  v17.4 · **必须**用 NODE_ENV=production 构建
+ *  ------------------------------------------------------------
+ *  【旧实现的灾难】
+ *  上面 `run()` 给**所有**子命令都塞了 NODE_ENV='development'，
+ *  那是为「补装 devDependencies」设计的（npm 在
+ *  NODE_ENV=production 下会跳过 devDependencies）。
+ *
+ *  但它连 `vite build` 也一起污染了，于是：
+ *
+ *    · Vite 的 `config.isProduction` 变成 false
+ *    · @vitejs/plugin-react 改用 **jsx-dev-runtime**
+ *      （产物里每个 JSX 节点都塞进 fileName / lineNumber）
+ *    · React 解析到 **development 版** 的 react-dom
+ *      （产物里塞进整套 dev-only 校验代码）
+ *
+ *  实测线上产物里能直接搜到：
+ *    "Each child in a list should have a unique \"key\" prop" ← dev 校验文案
+ *    jsxDEV(..., {fileName:..., lineNumber:...})              ← dev JSX runtime
+ *
+ *  后果：
+ *    1. 用户在控制台看到 React 的开发期警告（本项目就有一条
+ *       SVG `<g>` 的 key 警告，线上天天刷）
+ *    2. 包体白白大几十 KB（dev 校验 + 源码位置信息）
+ *    3. 运行时多跑一整套 dev-only 检查，首屏更慢
+ *
+ *  【解法】
+ *  只有「补装依赖」那一步需要 NODE_ENV=development；
+ *  真正的构建必须是 production。
+ */
+runLocalBin('vite', ['build'], 'Vite 构建', { NODE_ENV: 'production' })
 
 /* ============================================================
  *  5 · 产物校验（提前发现 "Missing entry-point"）
