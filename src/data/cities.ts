@@ -88,6 +88,33 @@ export async function loadRegions(): Promise<ProvinceTuple[]> {
       REGION_CACHE = list
       return list
     } catch (err) {
+      /*
+       * v9.2 · 破除「ESM 失败记录毒化」
+       * ------------------------------------------------------------
+       *  【致命症状】
+       *  线上偶发 `net::ERR_QUIC_PROTOCOL_ERROR`（或 ERR_CONNECTION_RESET
+       *  / ERR_EMPTY_RESPONSE）导致 regions chunk 第一次拉取失败，
+       *  表单永远卡在「载入中…」，用户完全走不下去 —— 整条链路断头。
+       *
+       *  【为什么原来的重试完全没用】
+       *  浏览器对 ES 模块有**按 specifier 缓存**的语义：
+       *  某个 specifier 一旦加载失败，浏览器会把这个失败**记进模块图**，
+       *  之后用**同一个 specifier** 再 import，
+       *  会**直接复用那条失败记录**，连网络请求都不会再发。
+       *
+       *  所以 `loadRegionsWithRetry()` 里三次同 specifier 的重试
+       *  全都是「瞬间失败」，重试逻辑形同虚设。
+       *
+       *  【解法：换 specifier —— 用 cache-buster 重试】
+       *  失败后拼一个 `?bust=N` 的**全新 specifier** 再 import。
+       *  浏览器没有这个 specifier 的模块记录，
+       *  于是会真正发起一次新的网络请求。
+       */
+      const recovered = await loadRegionsWithCacheBust()
+      if (recovered) {
+        REGION_CACHE = recovered
+        return recovered
+      }
       /* 失败不缓存，允许重试 */
       REGION_CACHE = null
       throw err instanceof Error
@@ -101,11 +128,80 @@ export async function loadRegions(): Promise<ProvinceTuple[]> {
   return PENDING
 }
 
+/* ============================================================
+ *  破除 ESM 失败记录毒化的兜底载入
+ * ============================================================ */
+
+/** cache-buster 计数 —— 每次重试换一个全新 specifier */
+let bustCounter = 0
+
+/**
+ * 找出刚才失败的那个 chunk 的真实 URL。
+ *
+ * 为什么需要它：
+ *   构建后 chunk 文件名带哈希（`regions-B6EnGjnX.js`），
+ *   源码里写不出来，只能运行时从 Resource Timing 里捞 ——
+ *   实测**失败的请求也会被记录进 Resource Timing**，
+ *   所以失败后仍能定位到确切 URL。
+ *
+ * 匹配方式：文件名以 `regions-` 开头且以 `.js` 结尾。
+ */
+function findRegionsChunkUrl(): string | null {
+  if (typeof performance === 'undefined') return null
+  try {
+    const entries = performance.getEntriesByType(
+      'resource',
+    ) as PerformanceResourceTiming[]
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const name = entries[i].name
+      const file = name.split('/').pop() ?? ''
+      if (/^regions-[A-Za-z0-9_-]+\.js$/.test(file)) return name
+    }
+  } catch {
+    /* Performance API 不可用（老浏览器 / 隐私模式） */
+  }
+  return null
+}
+
+/**
+ * 用**全新 specifier** 再试一次（绕过 ESM 的失败记录缓存）。
+ *
+ * 返回成功则给出数据；全部失败则返回 null，交由上层报错。
+ */
+async function loadRegionsWithCacheBust(): Promise<ProvinceTuple[] | null> {
+  const base = findRegionsChunkUrl()
+  if (!base) return null
+
+  /* 依次尝试 2 个不同的 cache-buster */
+  for (let i = 0; i < 2; i++) {
+    const sep = base.includes('?') ? '&' : '?'
+    const spec = `${base}${sep}bust=${++bustCounter}`
+    try {
+      /*
+       * `@vite-ignore` 在这里是**必须的**：
+       * 这个 specifier 是运行时拼出来的，Vite 无法在构建期重写它。
+       * 我们已经拿到了构建产物的真实 URL，
+       * 浏览器会直接按这个绝对地址去取 —— 正是我们要的。
+       */
+      const mod = await import(/* @vite-ignore */ spec)
+      const list = (mod as { REGIONS?: ProvinceTuple[] }).REGIONS
+      if (Array.isArray(list) && list.length > 0) return list
+    } catch {
+      /* 试下一个 specifier */
+    }
+  }
+  return null
+}
+
 /**
  * 带重试的载入。
  *
  * 指数退避：第 1 次等 400ms，第 2 次等 900ms。
  * 网络类错误（chunk 加载失败）在缓存预热后重试成功率很高。
+ *
+ * ⚠️ 注意：同 specifier 的重试会被浏览器的 ESM 失败记录缓存「毒化」，
+ *    所以真正的兜底在 `loadRegions()` 内部的
+ *    `loadRegionsWithCacheBust()` —— 那里会换一个全新 specifier。
  */
 export async function loadRegionsWithRetry(
   attempts = 3,
