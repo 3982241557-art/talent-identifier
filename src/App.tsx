@@ -310,6 +310,36 @@ export default function App() {
 
   const value = useMemo(() => ({ state, dispatch }), [state])
 
+  /**
+   * ============================================================
+   *  v17.2 · 「走进这片星空」的出口 —— 修复断头路由
+   * ============================================================
+   *
+   *  【旧版的问题】
+   *  旧版无论有没有星盘，一律跳到 `mbti` 页。
+   *  对于**已经测过 MBTI** 的老用户（存档里有 chart），
+   *  点这个主按钮会被**倒退回 MBTI 选择页**——
+   *  明明已经有星盘了，却还要重选一次类型，
+   *  用户感受就是「点进去出不来 / 流程断头」。
+   *
+   *  【v17.2 的解法】
+   *    · 已有星盘 + 已有 MBTI → 直接进 **dashboard**（主星盘面板，
+   *      带日月升图标、MBTI 解码、优势链条、聚光灯引导）
+   *    · 只有出生信息，还没测 MBTI → 进 `mbti` 继续测
+   *
+   *  两条路都能顺利走到「有日月升图标的主星盘面板」，绝不卡死。
+   */
+  const handleEnterChart = useCallback(() => {
+    if (state.chart && state.mbti) {
+      dispatch({ type: 'navigate', route: { name: 'dashboard' } })
+      return
+    }
+    dispatch({
+      type: 'navigate',
+      route: { name: 'mbti', view: 'branch' },
+    })
+  }, [state.chart, state.mbti])
+
   const stage = state.route.name
   const mbtiView = state.route.view ?? 'branch'
 
@@ -379,12 +409,7 @@ export default function App() {
                 month={Number(state.birth.date.slice(5, 7)) || 1}
                 day={Number(state.birth.date.slice(8, 10)) || 1}
                 accent={cosmosAmbient}
-                onEnter={() =>
-                  dispatch({
-                    type: 'navigate',
-                    route: { name: 'mbti', view: 'branch' },
-                  })
-                }
+                onEnter={handleEnterChart}
                 onBack={() => dispatch({ type: 'back' })}
               />
             </StageShell>

@@ -285,25 +285,50 @@ export function SpotlightTutorial({
   }, [rects])
 
   /**
-   * 浏览器是否支持 `clip-path: path(evenodd, ...)`。
+   * 【点击穿透遮罩 —— SVG evenodd 填充规则】
    *
-   * 不支持时退回旧方案：遮罩层不吃点击（pointerEvents: none），
-   * 只保留 SVG 层的视觉挖空 —— 此时用户必须用「下一步」/「跳过」推进，
-   * 但绝不会出现「按钮点不动」的错觉。
+   * v17.3 修复了一个致命交互 Bug：
+   * 之前用 CSS `clip-path: path(evenodd, "…")` 来把「洞」从遮罩里挖掉，
+   * 但 Chrome 的 `path()` 实现**只认 nonzero 规则**，
+   * 于是外框矩形与所有洞被当成同向叠加路径 → 洞里依然是「实心」→
+   * 整屏遮罩吃掉所有点击 → 被聚光灯照亮的按钮永远点不动，
+   * 「下一步」也点不动，教程直接变成死局。
+   *
+   * 现在改用 **SVG `<path fill-rule="evenodd">` 作为点击层**：
+   *   · 外框矩形 + N 个洞写进同一个 path
+   *   · evenodd 下「洞内」= 交叉 2 次 = 奇偶为偶 → 不填充 → 不吃点击 ✓
+   *   · 「洞外」= 交叉 1 次 = 填充 → 点击关闭教程 ✓
+   * SVG 的 fill-rule 是规范行为，跨浏览器 100% 可靠。
+   *
+   * ⚠️ 这个 useMemo 必须位于 `if (active === null) return null` **之前**，
+   * 否则 Hook 顺序会随 active 变化而改变，React 直接抛
+   * 「Rendered more hooks than during the previous render」。
    */
-  const [supportsClipPath, setSupportsClipPath] = useState(true)
-  useEffect(() => {
-    setSupportsClipPath(
-      typeof CSS !== 'undefined' &&
-        CSS.supports?.('clip-path', 'path(evenodd, "M 0 0 H 1 V 1 H 0 Z")') ===
-          true,
-    )
-  }, [])
+  const clickCatcherPath = useMemo(() => {
+    if (cutoutPaths.length === 0) return ''
+    return `M 0 0 H ${vw} V ${vh} H 0 Z ${cutoutPaths.join(' ')}`
+  }, [cutoutPaths, vw, vh])
 
   if (active === null) return null
 
   return (
-    <div className="fixed inset-0 z-[300]">
+    /*
+     * v17.2 · 根容器必须 `pointer-events: none`
+     *
+     * 【问题】
+     * 根容器是 `fixed inset-0` —— 它本身铺满整个视口。
+     * 即使里面的遮罩层用了 `clip-path` 挖洞，
+     * 落在洞里的点击依然会**冒泡到根容器**，
+     * 于是被聚光灯照亮的那个按钮**永远点不到**。
+     *
+     * 【解法】
+     *   · 根容器 → `pointer-events: none`（纯布局壳）
+     *   · 遮罩层 / 文案卡 / 底部控制条 → `pointer-events: auto`
+     *
+     * 这样洞里的点击会**穿透整个教程层**，
+     * 直接落到下面真实的界面上。
+     */
+    <div className="fixed inset-0 z-[300]" style={{ pointerEvents: 'none' }}>
       {/* ============================================================
           遮罩层：SVG mask 真挖空
           —— 挖出来的区域**完全透明**，
@@ -339,32 +364,23 @@ export function SpotlightTutorial({
 
       {/* 遮罩层本身要能接收点击（关闭） */}
       {/*
-        v17.2 修复：原来这里是 `pointerEvents: 'auto'` 的整屏 div。
-        它在**视觉上**把被讲解的区域挖空了（SVG mask），
-        但在**点击层面**仍然是实心的 ——
-        于是被聚光灯照亮的那个按钮点不动，
-        用户只能反复点「下一步」或「跳过」，体验像卡死。
-
-        现在改用 `clip-path: path(evenodd, ...)`：
-        evenodd 填充规则下，外框矩形减去所有洞 = 遮罩的**实际形状**。
-        洞里的区域**不再属于遮罩**，所以：
-          · 洞里的按钮 → 点击直接穿透到下面的真实元素 ✓
-          · 洞外的区域 → 仍然吃到遮罩的 onClick(关闭) ✓
+        v17.3：改用 SVG `<path fill-rule="evenodd">` 做点击层。
+        evenodd 填充规则下 —— 外框矩形减去所有洞 = 遮罩的**实际形状**：
+          · 洞里的按钮 → 不属于 path → 点击直接穿透到下面的真实元素 ✓
+          · 洞外的区域 → 属于 path → 点击关闭教程 ✓
 
         背景色仍由上面的 SVG <rect> 负责（带 mask 真挖空），
         这里只做点击层 —— 避免两层半透明叠加把画面压得过暗。
       */}
-      <div
-        className="absolute inset-0"
-        onClick={finish}
-        style={{
-          pointerEvents: supportsClipPath ? 'auto' : 'none',
-          clipPath:
-            supportsClipPath && cutoutPaths.length > 0
-              ? `path(evenodd, "M 0 0 H ${vw} V ${vh} H 0 Z ${cutoutPaths.join(' ')}")`
-              : undefined,
-        }}
-      />
+      {clickCatcherPath && (
+        <svg
+          className="absolute inset-0 h-full w-full"
+          style={{ pointerEvents: 'auto' }}
+          onClick={finish}
+        >
+          <path d={clickCatcherPath} fillRule="evenodd" fill="transparent" />
+        </svg>
+      )}
 
       {/* ============================================================
           聚光灯边框 —— 每个目标一圈流光脉冲
@@ -401,7 +417,7 @@ export function SpotlightTutorial({
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             className="absolute z-[301]"
-            style={cardPosition(primary, vw, vh)}
+            style={{ ...cardPosition(primary, vw, vh), pointerEvents: 'auto' }}
           >
             <div
               className="max-w-[420px] rounded-[20px] border px-7 py-6"
@@ -468,6 +484,7 @@ export function SpotlightTutorial({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.25 }}
         className="absolute inset-x-0 bottom-0 z-[302] flex flex-col items-center gap-5 pb-8"
+        style={{ pointerEvents: 'auto' }}
       >
         {/* 进度点 */}
         <div className="flex items-center gap-2.5">
@@ -539,7 +556,7 @@ export function SpotlightTutorial({
  *  文案卡定位
  *
  *  优先贴在主目标**下方**（下方空间够）；
- *  下��不够就放上方；左右则夹在视口内。
+ *  下方不够就放上方；左右则夹在视口内。
  * ============================================================ */
 function cardPosition(
   rect: TargetRect | null,

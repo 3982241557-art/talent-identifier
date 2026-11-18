@@ -166,16 +166,59 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
       role="img"
       aria-label="本命星盘"
     >
-      {/* ---------- 太阳 / 月亮 专属径向高光（任务 4） ---------- */}
-      <SunMoonGlow chart={chart} size={size} toXY={toXY} rPlanet={rPlanet} />
+      {/*
+       * v17.2 · 给这两个静态子元素补 key
+       *
+       * 【为什么需要】
+       * 下面第三个子元素是**条件表达式**（`{hovered && ...}`）。
+       * React 只要在 children 数组里看到一个非静态节点，
+       * 就会把整个数组标记为「动态 children」，
+       * 于是**数组里的每一个元素都被要求必须有 key** ——
+       * 包括这两个本该是静态的子元素。
+       *
+       * 少了 key，React 就会报：
+       *   Each child in a list should have a unique "key" prop.
+       *   Check the render method of `svg`. It was passed a child from Dg.
+       *
+       * 【解法】
+       * 给 `<SunMoonGlow>` 与 `<svg>` 各补一个稳定的 key。
+       */}
+      <SunMoonGlow
+        key="sun-moon-glow"
+        chart={chart}
+        size={size}
+        toXY={toXY}
+        rPlanet={rPlanet}
+      />
 
       <svg
+        key="astrolabe-svg"
         width={viewSize}
         height={viewSize}
         viewBox={`0 0 ${viewSize} ${viewSize}`}
         className="absolute inset-0"
       >
-        <defs>
+        {/*
+         * v17.2 · 所有图层包进一个带 key 的 `<g>`
+         *
+         * 【为什么必须这么做】
+         * 这个 `<svg>` 的 children 里混着**多个 `.map()` 数组**。
+         * React 一旦在 children 里看到数组，就会走
+         * `reconcileChildrenArray` —— 这条路径要求
+         * **数组里的每一个直接子元素都必须有 key**，
+         * 包括那些本来是静态的 `<defs>` / `<circle>` / `<g>`。
+         *
+         * 少一个 key，React 就会报：
+         *   Each child in a list should have a unique "key" prop.
+         *   Check the render method of `svg`. It was passed a child from Dg.
+         *
+         * 【解法】
+         * 把所有图层统一包进一个 `<g key="astrolabe-layers">`。
+         * 这样 `<svg>` 只有**一个**直接子元素（静态，不需 key），
+         * 而 `<g>` 内部的每个 `.map()` 数组都已经各自带 key。
+         */}
+        <g key="astrolabe-layers">
+        <defs key="astrolabe-defs">
           <radialGradient id="ast-core" cx="50%" cy="42%">
             <stop offset="0%" stopColor={theme.ambient} />
             <stop offset="70%" stopColor="rgba(0,0,0,0)" />
@@ -197,7 +240,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
         </defs>
 
         {/* 中心柔光（保持克制，避免洗掉刻度） */}
-        <circle cx={vcx} cy={vcy} r={rOuter} fill="url(#ast-core)" />
+        <circle key="core-glow" cx={vcx} cy={vcy} r={rOuter} fill="url(#ast-core)" />
 
         {/* 元素能量弧 */}
         {arcs.map((a) => (
@@ -214,6 +257,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
 
         {/* 圆环组 */}
         <circle
+          key="ring-outer"
           cx={vcx}
           cy={vcy}
           r={rOuter}
@@ -222,6 +266,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           strokeWidth="1"
         />
         <circle
+          key="ring-sign"
           cx={vcx}
           cy={vcy}
           r={rSign}
@@ -230,6 +275,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           strokeWidth="0.7"
         />
         <circle
+          key="ring-house"
           cx={vcx}
           cy={vcy}
           r={rHouse}
@@ -238,6 +284,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           strokeWidth="0.6"
         />
         <circle
+          key="ring-inner"
           cx={vcx}
           cy={vcy}
           r={rInner}
@@ -282,6 +329,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                *   · 元素色只作为**极弱的辉光**参与，不作为填充色
                */}
               <g
+                key={`sign-glyph-${s.key}`}
                 transform={`translate(${x - iconSize / 2} ${y - iconSize / 2 - size * 0.014})`}
                 style={{
                   filter: `drop-shadow(0 0 5px ${sColor}55)`,
@@ -291,6 +339,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                 <GlyphIcon size={iconSize} color="rgba(228, 214, 182, 0.88)" />
               </g>
               <text
+                key={`sign-label-${s.key}`}
                 x={x}
                 y={y + size * 0.033}
                 textAnchor="middle"
@@ -425,7 +474,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           const y2 = vcy - (rOuter - 2) * Math.sin(ang)
           const { x, y } = toXY(chart.risingLongitude + 4, rSign)
           return (
-            <g>
+            <g key="asc-marker">
               <line
                 x1={x1}
                 y1={y1}
@@ -536,7 +585,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
         })}
 
         {/* 中心三巨头 */}
-        <g>
+        <g key="k0">
           <circle
             cx={vcx}
             cy={vcy}
@@ -592,6 +641,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
             {chart.bigThree.sun.sign.cn} · {chart.bigThree.moon.sign.cn}
           </text>
         </g>
+        </g>
       </svg>
 
       {/* ---------- 元素 Tooltip（任务 3） ---------- */}
@@ -603,6 +653,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           const flip = end.x > vcx
           return (
             <div
+              key="element-tooltip"
               className="pointer-events-none absolute z-20 w-[268px] border border-white/12 bg-white/8 px-5 py-4 backdrop-blur-md"
               style={{
                 left: flip ? end.x - 282 : end.x + 14,

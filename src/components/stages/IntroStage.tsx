@@ -124,17 +124,26 @@ export function IntroStage({
     >
       {/* ========== 阶段一 / 二：中央的一句话 ==========
        *
-       * v17.0：
-       *   · `.screen-center` 强制全视口严格居中（水平 + 垂直）
-       *   · StarlightText 保证同一时刻 DOM 里只有一段文字
+       * v17.2 · 修复「竖排排版灾难」
+       *
+       * 【根因】
+       * 旧版用 `max-w-[22ch]` 限制宽度 ——
+       * 但 `ch` 单位是按**元素自身字体**的「0」字宽计算的，
+       * 而 `p` 标签本身字号是继承来的 16px（不是里面 57.6px 的标题字号），
+       * 于是 22ch ≈ 178px —— 比一个汉字还窄。
+       * 结果：整句被挤成**每行一个字**的竖排。
+       *
+       * 【修法】
+       *   · 宽度改用 `rem` / `min()` 计算，给足横向空间
+       *   · `white-space: nowrap` 兜底，绝不允许折行成竖排
+       *   · 字号收敛到能在一行内放下的区间
        */}
       {(phase === 'starlight' || phase === 'reveal') && (
         <div className="screen-center">
-          <p className="max-w-[22ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist">
+          <p className="hero-line">
             <StarlightText
               text={phase === 'starlight' ? LINE_1 : LINE_2}
-              className="starlight-breathe"
-              style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
+              className="starlight-breathe hero-line-text"
             />
           </p>
         </div>
@@ -143,11 +152,10 @@ export function IntroStage({
       {/* ========== 阶段三：镜头推进 ========== */}
       {phase === 'warp' && (
         <div className="screen-center">
-          <p className="max-w-[20ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist">
+          <p className="hero-line">
             <StarlightText
               text={LINE_3}
-              className="starlight-breathe"
-              style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
+              className="starlight-breathe hero-line-text"
             />
           </p>
         </div>

@@ -116,6 +116,25 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="mt-9"
         >
+          {/* ---------- v17.2 · 极简版标识 ----------
+           * 与深度版的门头形成对称，
+           * 但体量刻意更小 —— 暗示「三秒读完」。 */}
+          <div className="mb-6 flex items-center gap-3">
+            <span
+              className="rounded-full px-3 py-0.5 text-[0.625rem] font-bold tracking-[0.26em]"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                color: 'rgba(244,246,250,0.62)',
+                border: '1px solid rgba(255,255,255,0.13)',
+              }}
+            >
+              ⚡️ 极简直给版
+            </span>
+            <span className="text-[0.75rem] font-medium tracking-[0.18em] text-ink-mute">
+              一句话 + 三个长处 + 今天能做的一件事
+            </span>
+          </div>
+
           {/* 大字号结论句 */}
           <p
             className="serif-body max-w-[820px] font-semibold leading-[1.55] text-mist"
@@ -184,6 +203,29 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
         exit={{ opacity: 0, y: -12 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
+      {/* ---------- v17.2 · 深度版标识条 ----------
+       * 与极简版形成**明确的视觉反差**：
+       * 极简版 = 一屏读完的三张短卡；
+       * 深度版 = 带门头的双栏长文布局。 */}
+      <div
+        className="mt-8 flex items-center gap-4 border-b pb-4"
+        style={{ borderColor: `${accent}33` }}
+      >
+        <span
+          className="rounded-full px-3.5 py-1 text-[0.6875rem] font-bold tracking-[0.28em]"
+          style={{
+            background: `${accent}22`,
+            color: accent,
+            border: `1px solid ${accent}44`,
+          }}
+        >
+          🔭 深度剖析版
+        </span>
+        <span className="text-[0.8125rem] font-medium tracking-[0.2em] text-ink-mute">
+          逐层拆开 · 含四个字母详解与历史人物共鸣
+        </span>
+      </div>
+
       {/* ---------- 一句话底色 ---------- */}
       {info && (
         <motion.p

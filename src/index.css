@@ -510,6 +510,21 @@ body {
   transform: translateY(-1px);
 }
 
+/* ============================================================
+ *  v17.2 · 光子呼吸（主 CTA 的柔和脉冲光晕）
+ * ============================================================ */
+@keyframes photon-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
 /* ---- 脉冲星青描边按钮（次 CTA） ---- */
 .btn-pulsar {
   background: rgba(124, 224, 249, 0.08);
@@ -536,6 +551,135 @@ body {
 
 .btn-ghost:hover {
   color: var(--color-gold);
+}
+
+/* ============================================================
+ *  v17.2 · 开场标语（Hero Line）—— 电影级横排短句
+ * ============================================================
+ *
+ *  【修复竖排排版灾难】
+ * 旧版 `max-w-[22ch]` —— `ch` 按**元素自身**的「0」字宽算，
+ * 而容器本身是 16px 正文，22ch ≈ 178px < 一个汉字的宽度，
+ * 于是整句被压成每行一字的竖排。
+ *
+ * 现在：
+ *   · 宽度用 `min()` + `rem` 给足空间（不依赖 ch）
+ *   · `white-space: nowrap` 兜底 —— 宁可溢出裁切，也绝不折行成竖排
+ *   · 字号按 `vw` 收敛，保证 1280~1920px 都在一行内
+ *
+ *  【美学】
+ *   · 明朝体（Noto Serif SC / Songti SC）—— 电影级中文衬线
+ *   · `letter-spacing: 0.2em` 的呼吸感字距
+ *   · 三层柔和星光白发光滤镜（text-shadow 可叠加多层）
+ */
+.hero-line {
+  width: min(92vw, 72rem);
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  white-space: nowrap;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-mist);
+  /* 柔和星光白发光滤镜 */
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.3),
+    0 0 26px rgba(214, 228, 255, 0.22),
+    0 0 64px rgba(120, 170, 235, 0.16);
+}
+
+/* 标语本体 —— 字号独立于容器，保证一行放得下
+ *
+ * 【注意】letter-spacing 必须写在 .hero-line-text 自身。
+ * CSS 的 letter-spacing 会把 em 解析成「当前元素」的 font-size 后
+ * 以绝对长度继承下去；若只写在父级 .hero-line（font-size: 16px）上，
+ * 0.2em 只会算成 3.2px，到了 45px 的标语上几乎看不出呼吸感。
+ */
+.hero-line-text {
+  display: inline-block;
+  font-size: clamp(1.6rem, 3.15vw, 3.5rem);
+  letter-spacing: 0.2em;
+  /* 末字补偿：letter-spacing 会在最后一个字后也留一格，居中会偏左 */
+  text-indent: 0.2em;
+  white-space: nowrap;
+}
+
+/* 窄屏（手机竖屏）—— 允许折行，但仍保持优雅的两行居中 */
+@media (max-width: 640px) {
+  .hero-line {
+    white-space: normal;
+    line-height: 1.6;
+  }
+  .hero-line-text {
+    font-size: clamp(1.35rem, 6.4vw, 2.1rem);
+    letter-spacing: 0.12em;
+    text-indent: 0.12em;
+    white-space: normal;
+  }
+}
+
+/* ============================================================
+ *  v17.2 · 哈勃深空页 —— 沉浸式全屏背景影像
+ * ============================================================
+ *
+ *  【为什么要改成 background-image】
+ * 旧版用 `<img>` + `object-cover`：
+ *   · 图片元素自带默认的 `line-height` 间隙（底边空隙）
+ *   · 无法叠加「边缘暗角」而不额外铺一层
+ *   · 与 `inset` 阴影融合时边缘会出现硬矩形
+ *
+ *  现在用 `background-image` + `background-size: cover`：
+ *   · 天然铺满，零间隙
+ *   · 同一元素上叠 `radial-gradient` 与 `inset` 阴影做融合
+ *   · 配合 `@keyframes slowZoom` 做 40s 的极慢推近（Ken Burns）
+ */
+
+/* 极慢推近 —— 让静谧的星云有真实的流动感 */
+@keyframes slowZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+
+/* 影像加载后的柔和淡入 */
+@keyframes kenburns-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Ken Burns：缓慢推近 + 轻微漂移，40s 一轮，无限循环 */
+.kenburns-layer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform-origin: center center;
+  animation: slowZoom 40s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* 深空融合滤镜 —— 边缘自然暗下去，融进黑色背景 */
+.deepspace-fusion {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 16vw rgba(3, 5, 8, 0.78),
+    inset 0 0 5vw rgba(3, 5, 8, 0.38);
+  background: radial-gradient(
+    ellipse 122% 92% at 50% 44%,
+    rgba(3, 5, 8, 0) 0%,
+    rgba(3, 5, 8, 0.32) 62%,
+    rgba(3, 5, 8, 0.82) 100%
+  );
 }
 
 /* ============================================================
@@ -894,15 +1038,16 @@ body {
   display: inline-flex;
   align-items: stretch;
   gap: 2px;
-  padding: 3px;
+  padding: 4px;
   border-radius: 9999px;
-  background: rgba(10, 15, 28, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 13, 26, 0.82);
+  border: 1px solid rgba(245, 194, 107, 0.24);
   box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+    0 14px 40px rgba(0, 0, 0, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 26px rgba(245, 194, 107, 0.12);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
 }
 
 [data-version-toggle] button {
@@ -920,12 +1065,14 @@ body {
 [data-version-toggle] button[data-active='true'] {
   background: linear-gradient(
     135deg,
-    rgba(245, 194, 107, 0.96) 0%,
-    rgba(232, 168, 76, 0.94) 100%
+    rgba(245, 194, 107, 0.97) 0%,
+    rgba(232, 168, 76, 0.95) 100%
   );
   color: #0a0d16;
   font-weight: 700;
-  box-shadow: 0 0 20px rgba(245, 194, 107, 0.4);
+  box-shadow:
+    0 0 22px rgba(245, 194, 107, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 [data-version-toggle] button[data-active='false'] {

@@ -37,14 +37,10 @@ interface BirthSkyProps {
 }
 
 /* ---------- Ken Burns 参数 ---------- */
-/** 每一段推进的时长（秒） */
-const KEN_BURNS_DURATION = 22
-/** 缩放区间 */
-const ZOOM_FROM = 1.0
-const ZOOM_TO = 1.16
-/** 位移区间（百分比） */
-const PAN_FROM = { x: -1.5, y: 1.2 }
-const PAN_TO = { x: 1.5, y: -1.2 }
+/**
+ * v17.2：推近动画交给 CSS `@keyframes slowZoom`（40s，scale 1 → 1.1）。
+ * 淡入关键帧 `kenburns-fade` 同样定义在 index.css 里。
+ */
 
 export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps) {
   /** 出生那天的真实影像 */
@@ -66,26 +62,13 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
   const releaseId = useRef(0)
 
   /* ============================================================
-   *  Ken Burns：22 秒一轮的缓慢推进 + 反向
-   * ============================================================ */
-  const [panTick, setPanTick] = useState(0)
-
-  useEffect(() => {
-    const t = window.setInterval(() => {
-      setPanTick((v) => (v + 1) % 2)
-    }, KEN_BURNS_DURATION * 1000)
-    return () => window.clearInterval(t)
-  }, [])
-
-  const forward = panTick === 0
-  const kenBurns = useMemo(
-    () => ({
-      scale: forward ? ZOOM_FROM : ZOOM_TO,
-      x: forward ? PAN_FROM.x : PAN_TO.x,
-      y: forward ? PAN_FROM.y : PAN_TO.y,
-    }),
-    [forward],
-  )
+   *  Ken Burns
+   * ============================================================
+   *
+   *  v17.2：推近动画改由 CSS `@keyframes slowZoom`（40s）承担，
+   *  这里不再需要 JS 定时器 —— 少一个 setInterval，
+   *  也避免 React 状态更新打断动画。
+   */
 
   /* ============================================================
    *  「把烦恼丢进宇宙」
@@ -100,54 +83,52 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
   return (
     <div className="screen-col relative">
       {/*
-       * ========== 全屏影像 ==========
+       * ============================================================
+       *  v17.2 · 全屏沉浸式影像层
+       * ============================================================
        *
-       * v17.0 · 指针事件修复
-       * 这一整层是纯装饰（影像 + 压暗渐变），
-       * 但因为它是 `absolute inset-0`，
-       * 会盖住底部按钮，导致「看得见、点不动」。
-       * 整层 `pointer-events-none` 即可。
+       *  【v17.0 的问题】
+       *  旧版用 `<motion.img className="object-cover">`：
+       *    · `<img>` 是 inline 元素，父级 line-height 会在底边留出空隙
+       *    · 想把边缘「融进黑色背景」，只能额外铺 3~4 层渐变 div
+       *    · 结果是层层叠叠、边缘仍是硬矩形，像贴图
+       *
+       *  【v17.2 的解法】
+       *  改成 **background-image** 承载影像：
+       *    · `background-size: cover` + `background-position: center` —— 零间隙铺满
+       *    · 同一层叠 `radial-gradient` + `inset` box-shadow 做深空融合
+       *    · `.kenburns-layer` 挂 `@keyframes slowZoom`（40s scale 1 → 1.1）
+       *      极慢推近，让静谧的星云有真实的流动感
+       *
+       *  整层仍是 `pointer-events-none` —— 纯装饰，不能挡住底部按钮。
        */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden bg-void">
+        {/* ---------- 影像本体（background-image + Ken Burns） ---------- */}
         {imgOk && field.image && (
-          <motion.img
+          <div
             key={field.id}
-            src={field.image}
-            alt={`${field.title} —— ${field.en}`}
-            onError={() => setImgOk(false)}
-            initial={{ opacity: 0, scale: ZOOM_FROM }}
-            animate={{
-              opacity: 1,
-              scale: kenBurns.scale,
-              x: `${kenBurns.x}%`,
-              y: `${kenBurns.y}%`,
-            }}
-            transition={{
-              duration: KEN_BURNS_DURATION,
-              ease: 'linear',
-              repeat: Infinity,
-              repeatType: 'reverse',
-            }}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="kenburns-layer"
+            role="img"
+            aria-label={`${field.title} —— ${field.en}`}
             style={{
-              filter: 'saturate(115%) contrast(108%) brightness(72%)',
+              backgroundImage: `url("${field.image}")`,
+              filter: 'saturate(122%) contrast(104%) brightness(88%)',
+              opacity: 0,
+              animation:
+                'slowZoom 40s ease-in-out infinite alternate, kenburns-fade 1.6s ease-out forwards',
             }}
+            onError={() => setImgOk(false)}
           />
         )}
 
-        {/* 深空压暗 + 边缘渐隐，让文字浮起来 */}
+        {/* ---------- 深空融合滤镜：径向渐变 + inset 暗角 ---------- */}
+        <div className="deepspace-fusion" />
+
+        {/* ---------- 上下压暗带（给文字让出呼吸空间） ---------- */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-x-0 top-0 h-40"
           style={{
-            background:
-              'radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,5,8,0.10) 0%, rgba(3,5,8,0.58) 62%, rgba(3,5,8,0.90) 100%)',
-          }}
-        />
-        {/* 上下压暗带 */}
-        <div
-          className="absolute inset-x-0 top-0 h-52"
-          style={{
-            background: 'linear-gradient(to bottom, rgba(3,5,8,0.82), transparent)',
+            background: 'linear-gradient(to bottom, rgba(3,5,8,0.78), transparent)',
           }}
         />
         <div
@@ -227,39 +208,20 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
         </motion.div>
       </div>
 
-      {/* ========== 底部：进入按钮 + 烦恼粉碎舱 ========== */}
+      {/* ============================================================
+          底部：烦恼粉碎舱 + **主按钮（在其下方）**
+          ============================================================
+          v17.2：按需求把「走进这片星空，开启我的星盘 →」放到
+          烦恼输入框**下方** —— 用户先倾诉，再启程。
+          按钮是这一页唯一的主 CTA，做成醒目的发光药丸。
+          ============================================================ */}
       <div className="screen-fixed shrink-0 px-6 pb-8">
-        {/* ---------- 进入星盘 ---------- */}
-        <motion.div
-          initial={{ opacity: 0, y: 26 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 1.2 }}
-          className="flex flex-col items-center gap-5"
-        >
-          <button
-            onClick={onEnter}
-            className="btn-photon group rounded-full px-10 py-4 text-[clamp(1rem,1.15vw,1.3rem)] font-semibold tracking-[0.18em]"
-            style={{
-              boxShadow: `0 12px 46px ${field.accent}44, 0 0 0 1px ${field.accent}33 inset`,
-            }}
-          >
-            走进这片星空，开启我的星盘
-            <span className="ml-3 inline-block text-[1.1em] transition-transform duration-700 group-hover:translate-x-1.5">
-              →
-            </span>
-          </button>
-
-          <p className="text-[clamp(0.75rem,0.85vw,0.9375rem)] font-medium tracking-[0.22em] text-ink-mute">
-            {month} 月 {day} 日 · 那天哈勃看到的宇宙
-          </p>
-        </motion.div>
-
         {/* ---------- 烦恼粉碎舱 ---------- */}
         <motion.div
           initial={{ opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 1.8 }}
-          className="mx-auto mt-7 w-full max-w-[680px]"
+          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 0.6 }}
+          className="mx-auto w-full max-w-[680px]"
         >
           <WorryRelease
             value={worry}
@@ -268,6 +230,42 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
             released={released}
             accent={field.accent}
           />
+        </motion.div>
+
+        {/* ---------- 主 CTA：走进这片星空 ---------- */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 1.1 }}
+          className="mt-8 flex flex-col items-center gap-5"
+        >
+          <button
+            onClick={onEnter}
+            data-enter-chart
+            className="btn-photon group relative rounded-full px-12 py-5 text-[clamp(1.05rem,1.25vw,1.45rem)] font-semibold tracking-[0.18em]"
+            style={{
+              boxShadow: `0 16px 60px ${field.accent}55, 0 0 0 1px ${field.accent}44 inset, 0 0 40px ${field.accent}33`,
+            }}
+          >
+            {/* 呼吸光晕 */}
+            <span
+              className="pointer-events-none absolute inset-0 rounded-full"
+              style={{
+                boxShadow: `0 0 34px ${field.accent}44`,
+                animation: 'photon-breathe 4.2s ease-in-out infinite',
+              }}
+            />
+            <span className="relative">
+              走进这片星空，开启我的星盘
+              <span className="ml-3 inline-block text-[1.1em] transition-transform duration-700 group-hover:translate-x-1.5">
+                →
+              </span>
+            </span>
+          </button>
+
+          <p className="text-[clamp(0.75rem,0.85vw,0.9375rem)] font-medium tracking-[0.22em] text-ink-mute">
+            {month} 月 {day} 日 · 那天哈勃看到的宇宙
+          </p>
         </motion.div>
       </div>
 

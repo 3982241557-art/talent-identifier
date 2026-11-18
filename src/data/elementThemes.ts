@@ -379,7 +379,7 @@ export function elementBackdrop(theme: ElementTheme): React.CSSProperties {
     background: [
       // 中心主光 —— 清透的中心亮区
       `radial-gradient(ellipse 74% 58% at 50% 32%, ${theme.ambient} 0%, rgba(0,0,0,0) 68%)`,
-      // 右下副光 —— 微��提亮的暖色晕染
+      // 右下副光 —— 微微提亮的暖色晕染
       `radial-gradient(ellipse 58% 48% at 86% 88%, ${theme.ambient2} 0%, rgba(0,0,0,0) 66%)`,
       // 左上铺底 —— 极淡的冷调，不发灰
       `radial-gradient(ellipse 66% 56% at 10% 6%, ${theme.ambient3} 0%, rgba(0,0,0,0) 70%)`,

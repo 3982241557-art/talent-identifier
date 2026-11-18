@@ -70,17 +70,18 @@ export function VersionToggle({
             data-active={String(active)}
             disabled={!available}
             onClick={() => available && onChange(v)}
-            className="px-4 py-2 text-[clamp(0.8125rem,0.92vw,1.05rem)] tracking-[0.08em] disabled:cursor-not-allowed disabled:opacity-35"
+            className="relative flex items-center justify-center gap-1.5 px-5 py-2.5 text-[clamp(0.8125rem,0.92vw,1.05rem)] font-semibold tracking-[0.08em] disabled:cursor-not-allowed disabled:opacity-35"
             style={{ transitionDuration: '0.4s' }}
           >
-            <span className="mr-1.5">{icon}</span>
+            <span className="mr-0.5 text-[1.05em] leading-none">{icon}</span>
             {text}
             {active && (
               <motion.span
                 layoutId="version-pill-glow"
                 className="pointer-events-none absolute inset-0 -z-10 rounded-full"
                 style={{
-                  boxShadow: '0 0 20px rgba(245,194,107,0.4)',
+                  boxShadow:
+                    '0 0 20px rgba(245,194,107,0.4), inset 0 1px 0 rgba(255,255,255,0.35)',
                 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               />

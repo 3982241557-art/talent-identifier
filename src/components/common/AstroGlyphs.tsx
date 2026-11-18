@@ -1,4 +1,10 @@
-import type { CSSProperties, ReactElement } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type CSSProperties,
+  type ReactElement,
+} from 'react'
 
 /* ============================================================
  *  天文观测级矢量图标（v17.0）
@@ -39,6 +45,23 @@ function Glyph({
   style,
   children,
 }: GlyphProps & { children: React.ReactNode }) {
+  /*
+   * v17.2：给 SVG 子元素补 key。
+   *
+   * 这些图标由静态 JSX 写成（每个 glyph 2~4 个 <path>），
+   * React 会警告
+   * 「Each child in a list should have a unique key prop」。
+   *
+   * 用 `Children.toArray` + `cloneElement` 统一补上索引 key ——
+   * 这些图形是**纯静态**的，索引 key 完全安全
+   * （它们不会重排、不会增删）。
+   */
+  const shaped = Children.toArray(children).map((child, i) =>
+    isValidElement(child)
+      ? cloneElement(child as ReactElement<{ key?: string }>, { key: `g${i}` })
+      : child,
+  )
+
   return (
     <svg
       width={size}
@@ -53,7 +76,7 @@ function Glyph({
       style={style}
       aria-hidden
     >
-      {children}
+      {shaped}
     </svg>
   )
 }
