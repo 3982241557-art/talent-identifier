@@ -208,7 +208,7 @@ export function IntroStage({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8, delay: 0.6 }}
-            className="screen-fixed shrink-0 px-8 pb-8 text-center text-[clamp(0.8125rem,0.95vw,1.05rem)] font-medium tracking-[0.28em] text-ink-mute"
+            className="screen-bottom shrink-0 px-8 pb-8 text-center text-[clamp(0.8125rem,0.95vw,1.05rem)] font-medium tracking-[0.28em] text-ink-mute"
           >
             <span className="hint-float inline-block">
               [ 轻触屏幕任意处继续 ]

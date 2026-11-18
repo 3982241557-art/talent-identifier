@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  VersionToggle,
+  type ReportVersion,
+} from '../common/VersionToggle'
+import {
   CYCLE_NODES,
   SKILL_LIBRARY,
   SKILL_CATEGORIES,
@@ -47,11 +51,21 @@ interface AdvantagePracticeProps {
   mbti: unknown
   /** 用户填写完成后的回调（用于生成 AI 建议） */
   onRequestAdvice?: (payload: AdvantageState) => void
+  /**
+   * 双版本状态（受控）。
+   *
+   * v17.4：面板**顶部**的「⚡️ 极简直给版 | 🔭 深度剖析版」
+   * 胶囊键与下方 AI 推演结果共用同一份状态 —— 任何位置切换都秒切。
+   */
+  version?: ReportVersion
+  onVersionChange?: (v: ReportVersion) => void
 }
 
 export function AdvantagePractice({
   accent,
   onRequestAdvice,
+  version,
+  onVersionChange,
 }: AdvantagePracticeProps) {
   /* ---------- 状态 ---------- */
   const [state, setState] = useState<AdvantageState>(EMPTY_ADVANTAGE)
@@ -124,14 +138,22 @@ export function AdvantagePractice({
           上半区：五步环形优势链条
           ============================================================ */}
       <section className="advantage-cycle">
-        <header className="mb-8 text-center">
-          <p className="eyebrow text-gold">ADVANTAGE CYCLE</p>
-          <h3 className="serif-title t-sub mt-3 text-mist">你的优势飞轮</h3>
-          <p className="serif-body mt-3 text-ink-soft">
-            优势不是一次性找到的 —— 它是个越转越快的圈。
-            <br />
-            每填完一格，那一格和它射出的箭头就会亮起来。
-          </p>
+        <header className="mb-8 flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="eyebrow text-gold">ADVANTAGE CYCLE</p>
+            <h3 className="serif-title t-sub mt-3 text-mist">你的优势飞轮</h3>
+            <p className="serif-body mt-3 text-ink-soft">
+              优势不是一次性找到的 —— 它是个越转越快的圈。
+              <br />
+              每填完一格，那一格和它射出的箭头就会亮起来。
+            </p>
+          </div>
+          {/* ---------- 双版本切换（面板顶部，与 AI 结果区共用状态） ---------- */}
+          <VersionToggle
+            value={version ?? 'minimal'}
+            onChange={(v) => onVersionChange?.(v)}
+            className="shrink-0"
+          />
         </header>
 
         <div className="relative mx-auto flex max-w-[980px] flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-center lg:gap-4">
@@ -572,10 +594,10 @@ export function AdvantagePractice({
           }}
         >
           <span className="text-[clamp(1rem,1.2vw,1.35rem)] font-semibold tracking-[0.1em] text-[#0a0d16]">
-            ✨ 结合我的星盘与优势链条，一键生成适合我的职位与行动方向
+            ✨ 一键生成适合职位与行动
           </span>
           <span className="mt-1 block text-[clamp(0.8125rem,0.9vw,1rem)] font-medium tracking-[0.08em] text-[#0a0d16]/70">
-            3 个具体岗位 · 1 个副业方向 · 下周就能做的 1 件小事
+            结合我的星盘与优势链条 · 3 个具体岗位 · 1 个副业方向 · 下周就能做的 1 件小事
           </span>
         </button>
       </section>

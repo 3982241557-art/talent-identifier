@@ -119,6 +119,19 @@ export function TalentMatrix({
   const handleAnalyse = async () => {
     setLoading(true)
     setNote('')
+    /*
+     * v17.4 · 双版本永远不空
+     *
+     * 本地语料天然就带 minimal / deep 两版，
+     * 先算一份作为**兜底底座**，
+     * AI 回来的版本只有在真的存在时才覆盖它。
+     *
+     * 【旧实现的坑】
+     * 走 AI 分支时直接 `minimal: ai.minimal` / `deep: ai.deep`，
+     * 而服务端在某些情况下**不返回**这两个字段 → deep 变成空数组 →
+     * 用户切到「深度剖析版」看到的是一片空白。
+     */
+    const localBase = computeTalent(chart, mbti, extra)
     try {
       const ai = await postTalent({ chart, mbti, extra })
       if (ai?.categories?.length) {
@@ -170,8 +183,13 @@ export function TalentMatrix({
           advice: (ai.advice ?? []).map((a) => a ?? ''),
           source: 'ai',
           /* v16.0：把双版本一并带过来 */
-          minimal: ai.minimal,
-          deep: ai.deep,
+          /* v17.4：AI 没给就用本地兜底，保证「深度版」永远有内容 */
+          minimal:
+            ai.minimal && ai.minimal.length > 0
+              ? ai.minimal
+              : localBase.minimal,
+          deep:
+            ai.deep && ai.deep.length > 0 ? ai.deep : localBase.deep,
         }
         setResult(merged)
         onResult?.(merged)

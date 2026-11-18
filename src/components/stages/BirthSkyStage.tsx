@@ -215,7 +215,7 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
           烦恼输入框**下方** —— 用户先倾诉，再启程。
           按钮是这一页唯一的主 CTA，做成醒目的发光药丸。
           ============================================================ */}
-      <div className="screen-fixed shrink-0 px-6 pb-8">
+      <div className="screen-bottom shrink-0 px-6 pb-8">
         {/* ---------- 烦恼粉碎舱 ---------- */}
         <motion.div
           initial={{ opacity: 0, y: 26 }}

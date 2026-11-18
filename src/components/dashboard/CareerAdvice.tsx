@@ -35,10 +35,30 @@ interface CareerAdviceProps {
   result: CareerAdviceResult
   /** 主题强调色 */
   accent: string
+  /**
+   * 受控版本（可选）。
+   *
+   * 传了就用外部的版本状态 —— 这样「优势挖掘实践」面板顶部
+   * 的那个胶囊切换键，和这里的结果区共用同一个状态，
+   * 用户在任何位置切换都是**秒切、无等待**。
+   */
+  version?: ReportVersion
+  /** 版本变更回调（配合受控 version 使用） */
+  onVersionChange?: (v: ReportVersion) => void
 }
 
-export function CareerAdvice({ result, accent }: CareerAdviceProps) {
-  const [version, setVersion] = useState<ReportVersion>('minimal')
+export function CareerAdvice({
+  result,
+  accent,
+  version: controlledVersion,
+  onVersionChange,
+}: CareerAdviceProps) {
+  const [localVersion, setLocalVersion] = useState<ReportVersion>('minimal')
+  const version = controlledVersion ?? localVersion
+  const setVersion = (v: ReportVersion) => {
+    if (controlledVersion === undefined) setLocalVersion(v)
+    onVersionChange?.(v)
+  }
 
   const { minimal, deep } = result
 

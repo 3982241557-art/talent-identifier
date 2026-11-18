@@ -20,6 +20,7 @@ import { TarotOverlay } from '../dashboard/TarotOverlay'
 import { SpotlightTutorial } from '../dashboard/SpotlightTutorial'
 import { AdvantagePractice } from '../dashboard/AdvantagePractice'
 import { CareerAdvice } from '../dashboard/CareerAdvice'
+import type { ReportVersion } from '../common/VersionToggle'
 import { TelescopeGlyph, CycleGlyph } from '../common/AstroGlyphs'
 import { postCareerAdvice, type CareerAdviceResult } from '../../lib/api'
 import type { AdvantageState } from '../../lib/advantage'
@@ -222,6 +223,14 @@ export function DashboardStage({
   const [careerError, setCareerError] = useState('')
   /** 新手引导重看 */
   const [guideReplay, setGuideReplay] = useState(false)
+  /**
+   * v17.4 · 双版本共享状态
+   *
+   * 「优势挖掘实践」面板顶部的胶囊键 与 下方 AI 推演结果区
+   * 共用这一份状态 —— 任意位置切换都是 0 延迟秒切。
+   */
+  const [advantageVersion, setAdvantageVersion] =
+    useState<ReportVersion>('minimal')
 
   const requestCareer = useCallback(
     async (advantage: AdvantageState) => {
@@ -845,6 +854,8 @@ export function DashboardStage({
                   chart={chart}
                   mbti={mbti}
                   onRequestAdvice={requestCareer}
+                  version={advantageVersion}
+                  onVersionChange={setAdvantageVersion}
                 />
 
                 {/* ---------- AI 职位建议结果 ---------- */}
@@ -882,7 +893,12 @@ export function DashboardStage({
 
                 {career && !careerLoading && (
                   <div className="mt-12">
-                    <CareerAdvice result={career} accent={theme.primary} />
+                    <CareerAdvice
+                      result={career}
+                      accent={theme.primary}
+                      version={advantageVersion}
+                      onVersionChange={setAdvantageVersion}
+                    />
                   </div>
                 )}
               </div>
