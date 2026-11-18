@@ -466,9 +466,12 @@ export async function handleApi(context) {
      * ============================================================ */
     if (path === '/api/soul') {
       const { chart, mbti, place } = body
+      /*
+       * describeSoulMaterial 返回的是**已经拼好的字符串**，
+       * 不是数组 —— 旧版这里还跟着 .filter().join()，
+       * 结果线上 /api/soul 直接抛 TypeError 500。
+       */
       const material = describeSoulMaterial(chart, mbti, place)
-        .filter(Boolean)
-        .join('\n')
 
       try {
         /* ============================================================

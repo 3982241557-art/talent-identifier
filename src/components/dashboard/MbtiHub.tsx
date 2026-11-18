@@ -1,4 +1,9 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import {
+  VersionToggle,
+  type ReportVersion,
+} from '../common/VersionToggle'
 import type { MbtiProfile } from '../../types'
 import { MBTI_TYPES } from '../../data/mbtiTypes'
 import { AXIS_PLAIN, splitType } from '../../data/mbtiPlain'
@@ -23,6 +28,17 @@ interface MbtiHubProps {
 }
 
 export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
+  /*
+   * v17.0 · 双版本切换
+   *
+   * ⚡️ 极简直给版：一句话结论 + 三个白话优势 + 今日行动
+   * 🔭 深度剖析版：完整含义 + 优势清单 + 盲区 + 四个字母详解 + 名人共鸣
+   *
+   * 极简版的内容**全部来自本地数据**（MBTI_TYPES），
+   * 不需要额外请求 —— 切换是 0 延迟秒切。
+   */
+  const [version, setVersion] = useState<ReportVersion>('minimal')
+
   if (!mbti) {
     return (
       <section className="w-full">
@@ -77,11 +93,97 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
         </div>
       </div>
 
+      {/* ---------- v17.0 · 双版本切换 ---------- */}
+      <div className="mt-6 flex justify-end">
+        <VersionToggle value={version} onChange={setVersion} />
+      </div>
+
       <span
         className="mt-6 block h-px w-full"
         style={{ background: accent }}
       />
 
+      {/* ============================================================
+          ⚡️ 极简直给版
+          一句话结论 + 三张白话短卡 + 一条今日行动
+          ============================================================ */}
+      {version === 'minimal' && info && (
+        <motion.div
+          key="mbti-minimal"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="mt-9"
+        >
+          {/* 大字号结论句 */}
+          <p
+            className="serif-body max-w-[820px] font-semibold leading-[1.55] text-mist"
+            style={{ fontSize: 'clamp(1.5rem, 2.3vw, 2.3rem)' }}
+          >
+            {info.essence}
+          </p>
+
+          {/* 三张短卡 */}
+          {info.strengths.length > 0 && (
+            <div className="mt-7 grid gap-3.5 sm:grid-cols-3">
+              {info.strengths.slice(0, 3).map((st, i) => (
+                <div
+                  key={i}
+                  className="rounded-[18px] border px-6 py-5"
+                  style={{
+                    borderColor: 'rgba(255,255,255,0.11)',
+                    background: 'rgba(9,14,26,0.6)',
+                  }}
+                >
+                  <span
+                    className="mb-2.5 block text-[0.6875rem] font-bold tracking-[0.3em]"
+                    style={{ color: accent }}
+                  >
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <p className="text-[clamp(0.9375rem,1.05vw,1.125rem)] font-semibold leading-[1.7] text-mist/92">
+                    {st}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 一条今日行动 */}
+          <div
+            className="mt-6 flex items-start gap-4 rounded-[18px] px-6 py-5"
+            style={{
+              background: `linear-gradient(120deg, ${accent}1f, transparent)`,
+              border: '1px solid rgba(255,255,255,0.10)',
+            }}
+          >
+            <div>
+              <p className="mb-1 text-[0.6875rem] font-bold tracking-[0.3em] text-ink-mute">
+                今天就能做
+              </p>
+              <p className="text-[clamp(1rem,1.2vw,1.3rem)] font-semibold leading-[1.6] text-mist">
+                {info.blindspot
+                  ? `留意「${info.blindspot.split('。')[0]}」这一点，别让它替你做决定。`
+                  : '今天照常发挥就好，不用刻意表现。'}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ============================================================
+          🔭 深度剖析版
+          完整含义 + 优势清单 + 盲区 + 四个字母详解 + 名人共鸣
+          ============================================================ */}
+      {version === 'deep' && (
+      <motion.div
+        key="mbti-deep"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -12 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
       {/* ---------- 一句话底色 ---------- */}
       {info && (
         <motion.p
@@ -259,6 +361,8 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
             ))}
           </div>
         </div>
+      )}
+      </motion.div>
       )}
     </section>
   )

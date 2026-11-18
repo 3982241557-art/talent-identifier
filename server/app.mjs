@@ -686,10 +686,12 @@ function normalizeTalentPayload(parsed, packs, domains) {
  * ============================================================ */
 app.post('/api/soul', async (req, res) => {
   const { chart, mbti, place } = req.body ?? {}
+  /*
+   * describeSoulMaterial 返回的是**已经拼好的字符串**，
+   * 不是数组 —— 旧版这里还跟着 .filter().join()，
+   * 结果线上 /api/soul 直接抛 TypeError 500。
+   */
   const material = describeSoulMaterial(chart, mbti, place)
-
-    .filter(Boolean)
-    .join('\n')
 
   try {
     /* ============================================================
