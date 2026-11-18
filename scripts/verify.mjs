@@ -1,6 +1,12 @@
 /**
- * 端到端视觉验证脚本
- * 依次走完 5 个阶段并截图，同时捕获控制台错误。
+ * 端到端视觉验证脚本（v17.0）
+ *
+ * 依次走完完整链路并截图，同时捕获控制台错误。
+ *
+ * v17.0 流程变更：
+ *   Intro → Form → **BirthSky（出生那天的真实宇宙）** → MBTI → Verdict → Dashboard
+ *   旧脚本还停留在 Intro 直接出表单的旧流程，会在第一步就超时。
+ *
  * 用法：node scripts/verify.mjs
  */
 import { chromium } from 'playwright-core'
@@ -31,92 +37,143 @@ const shot = async (name) => {
   console.log(`  📸 ${name}.png`)
 }
 
-// ---------- 阶段 1：苏格拉底破冰 ----------
+/** 点击含指定文案的元素（等待可见后再点） */
+const clickText = async (text, timeout = 15000) => {
+  const loc = page.locator(`text=${text}`).first()
+  await loc.waitFor({ state: 'visible', timeout })
+  await loc.click()
+}
+
+/* ---------- 阶段 1：苏格拉底破冰 ---------- */
 console.log('阶段 1 · Intro')
 await page.goto(BASE, { waitUntil: 'networkidle' })
 await page.waitForTimeout(2500)
 await shot('01-intro-greet')
 
-// 等待表单出现
-await page.waitForSelector('input[type="date"]', { timeout: 15000 })
-await page.waitForTimeout(1200)
-await shot('01-intro-form')
+/*
+ * v17.0：开场是点击触发的宇宙对话序列，共三个阶段：
+ *   starlight → reveal → warp → (1.5s 后) form
+ * 每一次点击推进一段，最后出现「开始」按钮才是真正的表单入口。
+ */
+console.log('  · 点击推进对话 1/3')
+await page.mouse.click(800, 500)
+await page.waitForTimeout(2200)
+await shot('01-intro-dialog')
 
-// 填写表单
-await page.fill('input[type="date"]', '1998-06-15')
-await page.fill('input[type="time"]', '14:30')
-await page.selectOption('select', '北京')
-await page.waitForTimeout(600)
-await shot('01-intro-filled')
+console.log('  · 点击推进对话 2/3')
+await page.mouse.click(800, 500)
+await page.waitForTimeout(3000)
+await shot('01-intro-warp')
 
-await page.click('text=让星盘显影')
-await page.waitForTimeout(2500)
-await shot('01-intro-verdict')
-
-// 进入形象阶段
-await page.waitForTimeout(5000)
-await shot('01-intro-avatar')
-
-await page.click('text=进入星盘')
+console.log('  · 点击推进对话 3/3')
+await page.mouse.click(800, 500)
 await page.waitForTimeout(1500)
+await shot('01-intro-ready')
 
-// ---------- 阶段 2：科普过场 ----------
-console.log('阶段 2 · Cinematic')
-await page.waitForTimeout(6000)
-await shot('02-cinematic')
+console.log('  · 点击「开始」进入出生信息表单')
+await clickText('开始')
+await page.waitForTimeout(1200)
 
-// 等字幕播完
-await page.waitForTimeout(20000)
-await shot('02-cinematic-end')
+/* ---------- 阶段 2：出生信息表单 ---------- */
+console.log('阶段 2 · Form')
+await page.waitForSelector('input[type="date"]', { timeout: 20000 })
+await page.waitForTimeout(1000)
+await shot('02-form-empty')
 
-await page.click('body')
+await page.fill('input[type="date"]', '1998-06-15')
+
+/* 出生地：省份 + 城市 两级 Cascader */
+const selects = page.locator('select')
+const selCount = await selects.count()
+if (selCount >= 1) {
+  await selects.nth(0).selectOption({ index: 1 }).catch(() => {})
+  await page.waitForTimeout(900)
+}
+if (selCount >= 2) {
+  await selects.nth(1).selectOption({ index: 1 }).catch(() => {})
+  await page.waitForTimeout(500)
+}
+
+/* 出生时辰：TimePicker 有 clock / shichen 两种模式 */
+await clickText('具体时刻').catch(() => {})
+await page.waitForTimeout(400)
+const timeInput = page.locator('input[type="time"]').first()
+if (await timeInput.count()) {
+  await timeInput.fill('14:30').catch(() => {})
+}
+
+/* 性别（必填） */
+await clickText('男').catch(() => {})
+await page.waitForTimeout(500)
+await shot('02-form-filled')
+
+await clickText('下一步')
 await page.waitForTimeout(2000)
 
-// ---------- 阶段 3：宿命主页 ----------
-console.log('阶段 3 · Dashboard')
-await page.waitForTimeout(2500)
-await shot('03-dashboard-top')
+/* ---------- 阶段 3：出生那天的真实宇宙 ---------- */
+console.log('阶段 3 · BirthSky（NASA 哈勃生日深空）')
+await page.waitForTimeout(4000)
+await shot('03-birthsky-hubble')
 
-await page.evaluate(() => {
-  document.querySelector('.thin-scroll')?.scrollTo({
-    top: 900,
-    behavior: 'instant',
-  })
-})
+/* 烦恼粉碎舱 */
+const worryInput = page
+  .locator('input[placeholder*="烦恼"], textarea[placeholder*="烦恼"]')
+  .first()
+if (await worryInput.count()) {
+  await worryInput.fill('今天被一件小事烦到了')
+  await page.waitForTimeout(400)
+  await shot('03-birthsky-worry-typed')
+  await clickText('丢进宇宙')
+  await page.waitForTimeout(2500)
+  await shot('03-birthsky-worry-dissolve')
+} else {
+  console.log('  · 未找到烦恼输入框，跳过粉碎舱')
+}
+
+/* 进入星盘 */
+await clickText('走进这片星空')
+await page.waitForTimeout(1500)
+await shot('03-birthsky-cta')
+
+/* ---------- 阶段 4：MBTI ---------- */
+console.log('阶段 4 · MBTI')
+await page.waitForTimeout(2000)
+await shot('04-mbti')
+
+/* ---------- 阶段 5：天赋解析 ---------- */
+console.log('阶段 5 · Verdict')
 await page.waitForTimeout(1200)
-await shot('03-dashboard-cards')
 
-// ---------- 阶段 4：全局向导 ----------
-console.log('阶段 4 · Guide')
-await page.click('text=展开 →')
+/* ---------- 阶段 6：主页 ---------- */
+console.log('阶段 6 · Dashboard')
 await page.waitForTimeout(3000)
-await shot('04-guide-overlay')
+await shot('06-dashboard-top')
 
-await page.click('text=继续 →')
-await page.waitForTimeout(1200)
+/* ---------- 优势挖掘实践入口 ---------- */
+const advEntry = page.locator('text=优势挖掘实践').first()
+if (await advEntry.count()) {
+  console.log('  · 打开优势挖掘实践')
+  await advEntry.scrollIntoViewIfNeeded().catch(() => {})
+  await page.waitForTimeout(800)
+  await shot('06-advantage-entry')
+  await advEntry.click().catch(() => {})
+  await page.waitForTimeout(2000)
+  await shot('06-advantage-panel')
+}
 
-await page.evaluate(() => {
-  document.querySelector('.thin-scroll')?.scrollTo({
-    top: 1900,
-    behavior: 'instant',
-  })
-})
-await page.waitForTimeout(1000)
-await shot('03-dashboard-wheel')
-
-await page.evaluate(() => {
-  const el = document.querySelector('.thin-scroll')
-  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'instant' })
-})
-await page.waitForTimeout(1200)
-await shot('03-dashboard-chat')
-
-// ---------- 阶段 5：AI 问答 ----------
-console.log('阶段 5 · Chat')
-await page.fill('input[placeholder="我有疑问……"]', '我总是害怕被人误解，怎么办？')
-await page.click('text=请教')
-await page.waitForTimeout(9000)
-await shot('05-chat-reply')
+/* 新手引导（聚光灯） —— 按钮是右上角「?」 */
+const guideBtn = page.locator('[aria-label="新手引导"]').first()
+if (await guideBtn.count()) {
+  console.log('  · 打开新手引导')
+  await guideBtn.click().catch(() => {})
+  await page.waitForTimeout(2200)
+  await shot('06-spotlight-step1')
+  for (const i of [2, 3]) {
+    await clickText('下一步', 8000).catch(() => {})
+    await page.waitForTimeout(1600)
+    await shot(`06-spotlight-step${i}`)
+  }
+}
 
 console.log('\n控制台错误：', errors.length ? errors : '无')
 await browser.close()

@@ -9,6 +9,13 @@ import {
 } from '../common/VersionToggle'
 import { useState } from 'react'
 import type { FortuneDimension, MultiFortuneResult } from '../../lib/api'
+import type { ReactElement } from 'react'
+import {
+  CareerGlyph,
+  WealthGlyph,
+  HealthGlyph,
+  LoveGlyph,
+} from '../common/AstroGlyphs'
 
 /* ============================================================
  *  运势卡片 —— 年度 / 月度 / 每日
@@ -86,15 +93,21 @@ export function FortuneCard({
  *  四维运势面板
  * ============================================================ */
 
-/** 维度图标与强调色 */
+/**
+ * 维度图标与强调色。
+ *
+ * v17.0：彻底废除 Emoji（🎯💰🌿❤️）——
+ * 彩色 Emoji 与深空磨砂底色完全不搭，一眼就能看出是「默认组件」。
+ * 全部换成与深空美学一致的**单色微光矢量图标**。
+ */
 const DIM_META: Record<
   string,
-  { icon: string; label: string; color: string }
+  { Icon: (p: { size?: number; color?: string }) => ReactElement; label: string; color: string }
 > = {
-  career: { icon: '🎯', label: '事业 / 学业', color: '#f0c04a' },
-  wealth: { icon: '💰', label: '财富', color: '#6fae7d' },
-  health: { icon: '🌿', label: '健康', color: '#8fc9d6' },
-  love: { icon: '❤️', label: '爱情', color: '#e08a9b' },
+  career: { Icon: CareerGlyph, label: '事业 / 学业', color: '#e8c98a' },
+  wealth: { Icon: WealthGlyph, label: '财富', color: '#a8c8b0' },
+  health: { Icon: HealthGlyph, label: '健康', color: '#a8ccd8' },
+  love: { Icon: LoveGlyph, label: '爱情', color: '#d8a8b4' },
 }
 
 /**
@@ -163,7 +176,7 @@ export function FortuneDimensions({
       <div className="grid gap-5 lg:grid-cols-2">
         {current.dimensions.map((d: FortuneDimension, i) => {
           const meta = DIM_META[d.key] ?? {
-            icon: '✦',
+            Icon: CareerGlyph,
             label: d.label,
             color: accent,
           }
@@ -178,7 +191,13 @@ export function FortuneDimensions({
             >
               {/* 维度标题 */}
               <div className="flex items-center gap-3">
-                <span className="text-[22px] leading-none">{meta.icon}</span>
+                {/* 单色微光矢量图标（不用 Emoji） */}
+                <span
+                  className="leading-none"
+                  style={{ filter: `drop-shadow(0 0 8px ${meta.color}55)` }}
+                >
+                  <meta.Icon size={22} color={meta.color} />
+                </span>
                 <h5
                   className="serif-title text-[clamp(1.125rem,1.3vw,1.6rem)] font-semibold tracking-[0.08em]"
                   style={{ color: meta.color }}
@@ -234,7 +253,13 @@ export function FortuneDimensions({
  *  v9.0 · 任务 4：文案砍掉约三分之一，语气改温和。
  * ============================================================ */
 
-export type FortuneScope = 'year' | 'month' | 'day'
+/*
+ * v17.0 · 运势时间尺度 —— 彻底纯粹化
+ *
+ * 只剩「今天」。年度 / 月度 / 本月四股力量全部移除，
+ * 避免复读机式凑版面与长周期废话串味。
+ */
+export type FortuneScope = 'day'
 
 /**
  * 维度 → 与星盘要素的关联规则（v11.0 · 任务 3 · 去占星术语化）
@@ -266,7 +291,7 @@ const DIM_RULES: Record<
     fields: () => [
       `你偏好哪一种资源形态，会直接影响你积累的方式`,
       `有些回报需要时间才看得见，你对这类事更有耐心`,
-      `接下来这段时间，哪一类机会更值得你花力气`,
+      `今天哪一类机会更值得你花力气`,
     ],
   },
   health: {
@@ -287,28 +312,21 @@ const DIM_RULES: Record<
   },
 }
 
-/** 时间尺度 → 趋势措辞与预警时间窗 */
+/**
+ * 时间尺度 → 趋势措辞与预警时间窗。
+ *
+ * v17.0：只剩「今天」。所有措辞严格锁定在 24 小时以内，
+ * 不出现「这个月」「未来几天」这类跨周期表述。
+ */
 const SCOPE_META: Record<
   FortuneScope,
   { label: string; span: string; trend: string; window: string }
 > = {
-  year: {
-    label: '年度运势',
-    span: '未来 12 个月',
-    trend: '这一年的大方向已经定下来了',
-    window: '本季度末至下个季度初',
-  },
-  month: {
-    label: '月度运势',
-    span: '未来 30 天',
-    trend: '这个月的重心每两周换一次',
-    window: '本月上半月与下半月交界处',
-  },
   day: {
-    label: '每日运势',
-    span: '未来 7 天',
+    label: '今日运势',
+    span: '今天这 24 小时',
     trend: '今天的状态由你当下的状态直接定调',
-    window: '未来三天内',
+    window: '今天之内',
   },
 }
 
@@ -340,19 +358,20 @@ export function localFortune(
       summary:
         `这${meta.span.slice(2)}，${dimMeta.label}会顺着${rule.source(chart)}这个特点走。` +
         `同样的事落在你身上，你的第一反应和别人不一样。`,
+      /* v17.0：全部锁定在今天 24 小时内，不出现长周期表述 */
       trend:
         `${meta.trend}。${dimMeta.label}的节奏是先理顺、再发力。` +
-        `前面适合把资源重新归位，后面才是投入的窗口。` +
+        `先把资源归位，再谈投入。` +
         `可以盯的信号：${signals}。`,
       warning:
         `${meta.window}留意一下：${dimMeta.label}要是突然推不动，` +
         `多半不是你运气差，是你同时在处理太多条线。` +
-        `留点缓冲，记下这${meta.label}的变化，下个周期好回看。`,
+        `留点缓冲，记下今天的变化，过几天回看会更有用。`,
     }
   })
 
   const overview =
-    `你这一阵子正走在「${chart.bigThree.sun.sign.keyword}」这条线上。` +
+    `今天你正走在「${chart.bigThree.sun.sign.keyword}」这条线上。` +
     `情绪的节律和行动的方式，会轮流浮现。`
 
   /*
@@ -397,7 +416,7 @@ export interface Fortune {
 
 export function fortuneText(
   chart: Chart,
-  kind: 'year' | 'month' | 'day',
+  kind: FortuneScope,
 ): Fortune {
   const sun = chart.bigThree.sun.sign
   const now = new Date()
@@ -411,26 +430,13 @@ export function fortuneText(
    * 现在只给**结论**与**行动建议**，
    * 像一位智慧的老友在给建议：自然、温和、直白。
    */
-  if (kind === 'year') {
-    return {
-      subtitle: `${now.getFullYear()} 年`,
-      title: '年度运势',
-      body:
-        `这一年围绕「${sun.keyword}」展开。` +
-        `情绪会跟着内在的节律起伏。` +
-        `先稳住步子，再谈扩张。`,
-    }
-  }
-  if (kind === 'month') {
-    return {
-      subtitle: `${now.getMonth() + 1} 月`,
-      title: '月度运势',
-      body:
-        `这个月的潮汐感会比平日明显。` +
-        `更适合做个观察者——` +
-        `看着事情发生，不必急着插手。`,
-    }
-  }
+  /*
+   * v17.0：年度 / 月度分支已删除。
+   * 只讲今天 —— 无论调用方传什么，最终都落到今日运势。
+   */
+  void kind
+  void sun
+  void now
   return {
     subtitle: '今日',
     title: '今日运势',

@@ -73,7 +73,8 @@ export function VerdictStage({
   return (
     <div className="screen-col">
       <div className="screen-scroll">
-        <div className="mx-auto flex w-full max-w-[1000px] flex-col items-center gap-8 px-8 py-8 sm:py-12">
+        {/* v17.0：严格居中 —— 容器自身占满视口高度并双向居中 */}
+        <div className="mx-auto flex min-h-full w-full max-w-[1000px] flex-col items-center justify-center gap-8 px-8 py-8 sm:py-12">
           <motion.p
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Chart } from '../../types'
 import { SIGNS } from '../../data/signs'
 import { ELEMENT_THEMES, blendedTheme } from '../../data/elementThemes'
+import { signGlyphComponent } from '../common/AstroGlyphs'
 
 /* ============================================================
  *  专业星盘（Astrolabe）· v4.0
@@ -268,23 +269,27 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           const lon = i * 30 + 15
           const { x, y } = toXY(lon, rSign)
           const sColor = ELEMENT_THEMES[s.element].primary
+          const GlyphIcon = signGlyphComponent(s.cn)
+          const iconSize = size * 0.042
           return (
             <g key={s.key}>
-              <text
-                x={x}
-                y={y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={size * 0.036}
-                fontWeight="700"
-                fill={sColor}
-                fillOpacity="1"
+              {/*
+               * v17.0：彻底废除 Unicode 字符（♈ ♉ ♊ …）。
+               * Unicode 星座符号在部分系统会渲染成**彩色卡通圆圈**，
+               * 且颜色/字重都不可控 —— 换成手绘 SVG 线条图标：
+               *   · 统一 1.1px 描边，纤细如刻蚀线
+               *   · 暗金 / 星光银双色，无饱和度
+               *   · 元素色只作为**极弱的辉光**参与，不作为填充色
+               */}
+              <g
+                transform={`translate(${x - iconSize / 2} ${y - iconSize / 2 - size * 0.014})`}
                 style={{
-                  filter: `drop-shadow(0 0 8px ${sColor}99)`,
+                  filter: `drop-shadow(0 0 5px ${sColor}55)`,
+                  opacity: 0.92,
                 }}
               >
-                {s.glyph}
-              </text>
+                <GlyphIcon size={iconSize} color="rgba(228, 214, 182, 0.88)" />
+              </g>
               <text
                 x={x}
                 y={y + size * 0.033}
@@ -292,7 +297,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                 dominantBaseline="central"
                 fontSize={size * 0.0155}
                 fontWeight="700"
-                fill="rgba(240,244,252,0.9)"
+                fill="rgba(240,244,252,0.82)"
                 letterSpacing="0.08em"
               >
                 {s.cn.replace('座', '')}

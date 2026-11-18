@@ -70,28 +70,92 @@ interface Star {
   color: string
 }
 
-function makeStars(count: number): Star[] {
-  // 固定种子的伪随机，保证每次渲染的星空一致（不闪烁跳变）
+/**
+ * 蓝噪声分布采样器 —— 杜绝「揉成一团的亮斑」
+ *
+ * 【问题】
+ * 纯随机撒点会出现统计学上的**团簇**（clustering），
+ * 尤其当星点带辉光（半径 × 7）时，
+ * 几个随机点叠在一起就形成一团模糊亮斑，
+ * 看起来像「廉价粒子特效」而不是真实星空。
+ *
+ * 【解法】
+ * 用**分层抖动网格**（jittered grid）：
+ *   1. 把画面切成 N×N 的网格
+ *   2. 每个格子放 1-2 颗星
+ *   3. 星在格子里**随机偏移**，但偏移量不超过格子的一半
+ *
+ * 结果：
+ *   · 任意两颗星的最小间距有保证 → 不会出现团簇
+ *   · 但整体分布仍然是随机的 → 不会看出网格
+ *   · 且完全确定性（固定种子）→ 每次渲染一致，不闪烁跳变
+ */
+function makeStars(
+  count: number,
+  width: number,
+  height: number,
+): Star[] {
+  // 固定种子的伪随机，保证每次渲染的星空一致
   let seed = 20261117
   const rnd = () => {
     seed = (seed * 9301 + 49297) % 233280
     return seed / 233280
   }
 
-  return Array.from({ length: count }, () => {
-    const depth = rnd()
-    const mag = rnd()
-    return {
-      x: rnd(),
-      y: rnd(),
-      depth,
-      r: 0.4 + mag * mag * 1.7 + depth * 1.0,
-      base: 0.30 + mag * 0.70,
-      phase: rnd() * Math.PI * 2,
-      speed: 0.25 + rnd() * 0.9,
-      color: STAR_COLORS[Math.floor(rnd() * STAR_COLORS.length)],
+  /*
+   * 网格密度按画面**最短边**算 —— 这样在超宽屏上不会拉伸成稀疏长条，
+   * 在竖屏上也不会挤成一团。
+   */
+  const aspect = width / Math.max(1, height)
+  const cols = Math.max(24, Math.round(Math.sqrt(count * aspect)))
+  const rows = Math.max(18, Math.round(count / cols))
+  const cellW = width / cols
+  const cellH = height / rows
+
+  const stars: Star[] = []
+
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      /*
+       * 每格 1-3 颗星。
+       * 用「概率」而不是「固定数量」，避免机械的均匀感。
+       */
+      const roll = rnd()
+      const perCell = roll > 0.94 ? 3 : roll > 0.68 ? 2 : 1
+
+      for (let k = 0; k < perCell; k++) {
+        /*
+         * 抖动偏移：限制在格子的中央 70% 区域 ——
+         * 留出安全边距，防止相邻格子的星贴到一起。
+         */
+        const jx = (0.15 + rnd() * 0.7) * cellW
+        const jy = (0.15 + rnd() * 0.7) * cellH
+        const x = (gx * cellW + jx) / width
+        const y = (gy * cellH + jy) / height
+
+        /*
+         * 深度分布刻意偏向**远景**（大量暗星），
+         * 近景只有少数亮星 —— 这才是真实星空的层次感。
+         * depth^1.6 让近景（depth≈1）的星星非常稀少。
+         */
+        const depth = Math.pow(rnd(), 1.6)
+        const mag = rnd()
+
+        stars.push({
+          x,
+          y,
+          depth,
+          r: 0.32 + mag * mag * 1.5 + depth * 0.85,
+          base: 0.22 + mag * 0.58 + depth * 0.16,
+          phase: rnd() * Math.PI * 2,
+          speed: 0.25 + rnd() * 0.9,
+          color: STAR_COLORS[Math.floor(rnd() * STAR_COLORS.length)],
+        })
+      }
     }
-  })
+  }
+
+  return stars
 }
 
 /* ============================================================
@@ -156,7 +220,11 @@ export function CosmicCanvas({
       canvas.style.width = `${w}px`
       canvas.style.height = `${h}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      starsRef.current = makeStars(Math.round((w * h) / 3000))
+      /*
+       * 密度：每 3400 平方像素一颗。
+       * 配合蓝噪声网格分布 —— 星星均匀铺开且互不团簇。
+       */
+      starsRef.current = makeStars(Math.round((w * h) / 3400), w, h)
     }
 
     resize()

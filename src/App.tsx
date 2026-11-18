@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AppContext, type AppAction, type AppState } from './store/AppContext'
 import { applyElementTheme, blendedTheme } from './data/elementThemes'
@@ -14,6 +14,7 @@ import { MbtiStage } from './components/stages/MbtiStage'
 import { FormStage } from './components/stages/FormStage'
 import { VerdictStage } from './components/stages/VerdictStage'
 import { DashboardStage } from './components/stages/DashboardStage'
+import { BirthSky } from './components/stages/BirthSkyStage'
 import {
   CosmicCanvas,
   DEFAULT_CAMERA,
@@ -167,6 +168,15 @@ export default function App() {
    * ============================================================ */
   const cameraRef = useRef<CosmicCamera>({ ...DEFAULT_CAMERA })
 
+  /* ============================================================
+   *  v17.0 · 「出生那天的星空」回看层
+   *
+   *  两个入口共用同一个组件：
+   *    · 首次：填完出生信息 → 路由到 birthsky
+   *    · 常驻：主界面顶部按钮 → 以浮层形式弹回
+   * ============================================================ */
+  const [skyOpen, setSkyOpen] = useState(false)
+
   /* ---------- 启动时恢复存档 ---------- */
   useEffect(() => {
     const accountId = getAccountId()
@@ -230,6 +240,9 @@ export default function App() {
     const stage = state.route.name
     if (stage === 'dashboard') {
       cameraRef.current = { zoom: 1.22, panX: 0, panY: 0 }
+    } else if (stage === 'birthsky') {
+      /* 出生星空页：镜头推到底，让深空影像占满视野 */
+      cameraRef.current = { zoom: 1.32, panX: 0, panY: 0.06 }
     } else if (stage === 'mbti') {
       cameraRef.current = { zoom: 1.08, panX: -0.04, panY: 0.02 }
     } else if (stage === 'form') {
@@ -344,11 +357,34 @@ export default function App() {
                 initial={state.birthDraft ?? state.birth}
                 onComplete={(birth) => {
                   dispatch({ type: 'setBirth', birth })
+                  /*
+                   * v17.0：填完出生信息**不直接跳星盘**，
+                   * 先进入「出生那天的真实宇宙」——
+                   * 让用户先看到哈勃在自己生日那天拍下的真实深空影像。
+                   */
+                  dispatch({
+                    type: 'navigate',
+                    route: { name: 'birthsky' },
+                  })
+                }}
+                onBack={() => dispatch({ type: 'back' })}
+              />
+            </StageShell>
+          )}
+
+          {/* ========== v17.0 · 出生那天的真实宇宙 ========== */}
+          {stage === 'birthsky' && state.birth && (
+            <StageShell key="birthsky">
+              <BirthSky
+                month={Number(state.birth.date.slice(5, 7)) || 1}
+                day={Number(state.birth.date.slice(8, 10)) || 1}
+                accent={cosmosAmbient}
+                onEnter={() =>
                   dispatch({
                     type: 'navigate',
                     route: { name: 'mbti', view: 'branch' },
                   })
-                }}
+                }
                 onBack={() => dispatch({ type: 'back' })}
               />
             </StageShell>
@@ -389,8 +425,33 @@ export default function App() {
                 chart={state.chart}
                 onRestart={handleRestart}
                 onEditMbti={handleEditMbti}
+                onOpenBirthSky={() => setSkyOpen(true)}
               />
             </StageShell>
+          )}
+        </AnimatePresence>
+
+        {/* ============================================================
+            v17.0 · 出生那天的星空 · 浮层回看
+            ============================================================ */}
+        <AnimatePresence>
+          {skyOpen && state.birth && (
+            <motion.div
+              key="sky-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
+              className="absolute inset-0 z-[250]"
+            >
+              <BirthSky
+                month={Number(state.birth.date.slice(5, 7)) || 1}
+                day={Number(state.birth.date.slice(8, 10)) || 1}
+                accent={cosmosAmbient}
+                onEnter={() => setSkyOpen(false)}
+                onBack={() => setSkyOpen(false)}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

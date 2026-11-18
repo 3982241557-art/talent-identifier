@@ -3,7 +3,19 @@
  * ============================================================ */
 
 /** 流程阶段（v3.0：出生信息 → MBTI 分支 → 灵魂底色 → 主页） */
-export type Stage = 'intro' | 'form' | 'mbti' | 'verdict' | 'dashboard'
+/**
+ * 路由节点。
+ *
+ * v17.0：新增 `birthsky` —— 填完出生信息后先进入
+ * 「出生那天的真实宇宙」，再进 MBTI。
+ */
+export type Stage =
+  | 'intro'
+  | 'form'
+  | 'birthsky'
+  | 'mbti'
+  | 'verdict'
+  | 'dashboard'
 
 /* ---------------- v3.0 · 路由栈 ---------------- */
 

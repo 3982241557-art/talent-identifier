@@ -412,6 +412,11 @@ interface ParallaxCardProps {
    * 引导层用 querySelector(`[data-guide-id="..."]`) 定位这张卡。
    */
   'data-guide-id'?: string
+  /**
+   * v17.0：聚光灯新手指引的高亮定位锚点。
+   * 与 data-guide-id 一样被转发到 DOM。
+   */
+  'data-spot'?: string
 }
 
 /**
@@ -430,6 +435,7 @@ export function ParallaxCard({
   className = '',
   style,
   'data-guide-id': guideId,
+  'data-spot': spot,
 }: ParallaxCardProps) {
   const { sx, sy, enabled } = useParallaxContext()
 
@@ -445,6 +451,7 @@ export function ParallaxCard({
     <motion.div
       data-parallax-layer="card"
       data-guide-id={guideId}
+      data-spot={spot}
       className={className}
       style={{
         x,

@@ -559,7 +559,7 @@ export function MbtiStage({
       </header>
 
       {/* 主体：左头像 + 右对话 */}
-      <div className="screen-body flex items-center justify-center px-8 py-6">
+      <div className="screen-center">
         <div className="flex w-full max-w-[1320px] flex-col items-center justify-center gap-8 lg:flex-row lg:items-center lg:gap-14">
           {/* 苏格拉底 */}
           <motion.div
@@ -695,6 +695,7 @@ export function MbtiStage({
                       return (
                         <motion.button
                           key={opt.label}
+                          data-mbti-option={opt.label}
                           onClick={() => handlePick(opt.value, opt.label)}
                           disabled={advancing}
                           animate={{

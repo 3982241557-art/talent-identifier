@@ -193,6 +193,57 @@ export async function postTalent(payload: {
 }
 
 /* ============================================================
+ *  优势挖掘 · AI 职位与行动方向推演
+ * ============================================================ */
+
+/** 极简版结构 */
+export interface CareerMinimal {
+  /** 一句高光结论 */
+  headline: string
+  /** 三条极简要点 */
+  points: string[]
+  /** 一条当下行动 */
+  action: string
+}
+
+/** 深度版结构 */
+export interface CareerDeep {
+  /** 为什么会这样 */
+  origins: string
+  /** 最容易踩的坑 */
+  friction: string
+  /** 怎么破局 */
+  solution: string
+  /** 三个具体岗位 */
+  jobs: Array<{ role: string; why: string }>
+  /** 副业切入点 */
+  sideProject: string
+  /** 下周能做的 1 件小事 */
+  nextWeek: string
+}
+
+/** 完整返回 */
+export interface CareerAdviceResult {
+  minimal: CareerMinimal
+  deep: CareerDeep
+}
+
+/** 用户填写的优势数据 */
+export interface AdvantagePayload {
+  cycle: Record<string, string>
+  coreSkills: [string, string, string]
+  crossedOut: string[]
+}
+
+export async function postCareerAdvice(payload: {
+  chart?: Chart
+  mbti?: MbtiProfile | null
+  advantage: AdvantagePayload
+}): Promise<CareerAdviceResult> {
+  return request<CareerAdviceResult>('/api/career-advice', payload, 90_000)
+}
+
+/* ============================================================
  *  健康检查
  * ============================================================ */
 export async function checkHealth(): Promise<boolean> {

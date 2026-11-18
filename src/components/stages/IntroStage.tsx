@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { TutorialDialog } from './TutorialDialog'
+import { StarlightText } from '../common/StarlightText'
 
 /* ============================================================
  *  v16.0 · 开场叙事 —— 点击触发的宇宙对话
@@ -57,7 +58,15 @@ export function IntroStage({
   >([])
   const rippleId = useRef(0)
 
-  /* ---------- 阶段推进 ---------- */
+  /* ---------- 阶段推进 ----------
+   *
+   * v17.0：严格单向。
+   * 旧版直接 setPhase，React 会在同一帧卸载旧文字、挂载新文字，
+   * 而 CSS 动画还没跑完 —— 于是旧文字在切换瞬间**回闪**。
+   *
+   * 现在：先把 line 置空（触发 StarlightText 的 exiting），
+   * 等它淡出完毕（onAnimationEnd），才真正切阶段。
+   */
   const advance = useCallback(() => {
     setPhase((p) => {
       if (p === 'starlight') return 'reveal'
@@ -113,42 +122,35 @@ export function IntroStage({
           : undefined
       }
     >
-      {/* ========== 阶段一 / 二：中央的一句话 ========== */}
-      <AnimatePresence mode="wait">
-        {(phase === 'starlight' || phase === 'reveal') && (
-          <motion.div
-            key={phase === 'starlight' ? 'l1' : 'l2'}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -26 }}
-            transition={{ duration: 1.1, ease: 'easeOut' }}
-            className="screen-body flex items-center justify-center px-8"
-          >
-            <p
-              className="starlight-breathe max-w-[22ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist"
+      {/* ========== 阶段一 / 二：中央的一句话 ==========
+       *
+       * v17.0：
+       *   · `.screen-center` 强制全视口严格居中（水平 + 垂直）
+       *   · StarlightText 保证同一时刻 DOM 里只有一段文字
+       */}
+      {(phase === 'starlight' || phase === 'reveal') && (
+        <div className="screen-center">
+          <p className="max-w-[22ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist">
+            <StarlightText
+              text={phase === 'starlight' ? LINE_1 : LINE_2}
+              className="starlight-breathe"
               style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
-            >
-              {phase === 'starlight' ? LINE_1 : LINE_2}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            />
+          </p>
+        </div>
+      )}
 
       {/* ========== 阶段三：镜头推进 ========== */}
       {phase === 'warp' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="screen-body flex items-center justify-center px-8"
-        >
-          <p
-            className="starlight-breathe max-w-[20ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist"
-            style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
-          >
-            {LINE_3}
+        <div className="screen-center">
+          <p className="max-w-[20ch] text-center font-semibold leading-[1.9] tracking-[0.1em] text-mist">
+            <StarlightText
+              text={LINE_3}
+              className="starlight-breathe"
+              style={{ fontSize: 'clamp(2.05rem, 3.6vw, 3.9rem)' }}
+            />
           </p>
-        </motion.div>
+        </div>
       )}
 
       {/* ========== 阶段四：出生信息卡浮现 ========== */}
@@ -157,7 +159,7 @@ export function IntroStage({
           initial={{ opacity: 0, y: 40, scale: 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-          className="screen-body flex items-center justify-center px-8"
+          className="screen-center"
         >
           <div className="glass-panel w-full max-w-[560px] rounded-[26px] px-10 py-12 text-center">
             <p className="eyebrow text-gold">YOUR BIRTH</p>

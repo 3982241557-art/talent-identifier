@@ -116,6 +116,315 @@ body {
   overflow: hidden;
 }
 
+/*
+ * v17.0 · 严格居中容器
+ *
+ * 【问题】
+ * 旧版各步骤页用 `flex items-center justify-center` 拼装，
+ * 但父容器 `.screen-body` 是 `flex: 1 1 0%`，
+ * 当上方还有 `.screen-fixed` 元素时，body 的实际高度 ≠ 视口高度，
+ * 导致「视觉偏上 / 偏左」的不对称。
+ *
+ * 【解法】
+ * `.screen-center` 强制：
+ *   · 自身占满视口（100dvh，兼容移动端地址栏）
+ *   · 水平 + 垂直双向居中
+ *   · 内部绝对居中，不受兄弟元素影响
+ *
+ * 【v17.0 · 指针事件修复】
+ * `.screen-center` 是 `position: absolute; inset: 0`，
+ * 它会**铺满整个视口**，把底部按钮（进入星盘 / 丢进宇宙）全部盖住 ——
+ * 表现为「按钮看得见、点不动」。
+ *
+ * 解法：容器本身 `pointer-events: none`（纯布局壳），
+ * 内部真正的内容块 `pointer-events: auto`（可交互）。
+ */
+.screen-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: clamp(1.5rem, 4vw, 4rem);
+  pointer-events: none;
+}
+
+/* 容器内的实际内容恢复可交互 */
+.screen-center > * {
+  pointer-events: auto;
+}
+
+/*
+ * v17.0 · 文字浮现动效（单向状态锁）
+ *
+ * 【问题】
+ * 旧版用 framer-motion 的 AnimatePresence 切换文字，
+ * exit 与 enter 动画在同一帧并发 —— 上一句在淡出的瞬间，
+ * 下一句已经开始淡入，两层文字叠在同一位置，
+ * 视觉上就是「文字回闪」。
+ *
+ * 【解法】
+ * 严格单向状态机：
+ *   entering（0.7s 淡入 + 上浮）
+ *      ↓ 等 opacity 到达 1
+ *   visible（停留）
+ *      ↓ 触发退出
+ *   exiting（0.7s 淡出 + 上浮）
+ *      ↓ 等 opacity 到达 0 且 **onExited 回调**已触发
+ *   unmounted（此时才允许挂载下一句）
+ *
+ * 关键点：**只有 exiting 完全结束后才切换 key**，
+ * 所以两段文字永远不会同时存在于 DOM 里。
+ */
+@keyframes starlight-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes starlight-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-22px);
+    filter: blur(5px);
+  }
+}
+
+/* 呼吸感慢速过渡：1.4s + cubic-bezier(0.22, 1, 0.36, 1) */
+.starlight-enter {
+  animation: starlight-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.starlight-exit {
+  animation: starlight-out 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ============================================================
+ *  v17.0 · 优势挖掘实践
+ * ============================================================ */
+
+/* ---------- 五步环图 ---------- */
+.advantage-ring {
+  display: block;
+  filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.55));
+}
+
+/* ---------- 节点输入框 ---------- */
+.adv-node {
+  position: relative;
+  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  transition: background 700ms ease, box-shadow 700ms ease;
+}
+
+.adv-node[data-lit='true'] {
+  background: linear-gradient(
+    120deg,
+    rgba(245, 194, 107, 0.07),
+    rgba(245, 194, 107, 0.02)
+  );
+  box-shadow: 0 0 26px rgba(245, 194, 107, 0.08);
+}
+
+/* ---------- 通用输入 ---------- */
+.adv-input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(8, 13, 26, 0.55);
+  padding: 0.7rem 0.95rem;
+  color: var(--color-mist);
+  font-size: clamp(0.875rem, 0.98vw, 1.0625rem);
+  font-weight: 500;
+  line-height: 1.6;
+  transition: border-color 600ms ease, box-shadow 600ms ease,
+    background 600ms ease;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.adv-input::placeholder {
+  color: rgba(196, 206, 224, 0.42);
+}
+
+.adv-input:focus {
+  outline: none;
+  border-color: rgba(245, 194, 107, 0.5);
+  background: rgba(10, 16, 30, 0.75);
+}
+
+/* ---------- 三条核心技能横线 ---------- */
+.adv-core-line {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.adv-core-num {
+  flex: 0 0 auto;
+  font-size: clamp(0.9375rem, 1.05vw, 1.125rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(228, 214, 182, 0.55);
+  text-shadow: 0 0 12px rgba(228, 214, 182, 0.3);
+}
+
+/* ---------- 技能排查库标签 ---------- */
+.adv-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 18, 32, 0.6);
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 500ms ease, border-color 500ms ease,
+    box-shadow 500ms ease, filter 500ms ease;
+}
+
+.adv-chip:hover {
+  border-color: rgba(245, 194, 107, 0.42);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+}
+
+.adv-chip-label {
+  position: relative;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.55rem 0.9rem;
+  color: rgba(240, 244, 252, 0.88);
+  font-size: clamp(0.8125rem, 0.9vw, 1rem);
+  font-weight: 500;
+  transition: color 500ms ease;
+}
+
+.adv-chip-text {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+/* 星光删除线 —— 斜向的一道细光 */
+.adv-chip-slash {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 244, 220, 0.95),
+    transparent
+  );
+  box-shadow: 0 0 10px rgba(255, 244, 220, 0.7);
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: center;
+  opacity: 0;
+  transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 400ms ease;
+}
+
+/* 已划掉：变暗退后 + 删除线出现 */
+.adv-chip[data-crossed='true'] {
+  opacity: 0.32;
+  filter: grayscale(0.8);
+  transform: scale(0.94);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.adv-chip[data-crossed='true'] .adv-chip-label {
+  color: rgba(240, 244, 252, 0.5);
+}
+
+.adv-chip[data-crossed='true'] .adv-chip-slash {
+  transform: translateY(-50%) scaleX(1);
+  opacity: 1;
+}
+
+/* + 号 */
+.adv-chip-plus {
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  padding: 0 0.7rem;
+  color: rgba(245, 194, 107, 0.75);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: background 400ms ease, color 400ms ease;
+}
+
+.adv-chip-plus:hover {
+  background: rgba(245, 194, 107, 0.16);
+  color: #fff4dc;
+}
+
+.adv-chip[data-crossed='true'] .adv-chip-plus {
+  opacity: 0.4;
+}
+
+/* ---------- 底部 CTA ---------- */
+.advantage-cta {
+  display: flex;
+  justify-content: center;
+}
+
+.advantage-cta-btn {
+  border: 0;
+  cursor: pointer;
+  border-radius: 9999px;
+  padding: 1.25rem 2.5rem;
+  text-align: center;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 600ms ease;
+}
+
+.advantage-cta-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* ---------- 深度版段落 ---------- */
+.career-section {
+  position: relative;
+  padding-left: 0.25rem;
+}
+
+/* v17.0 · 聚光灯脉冲（游戏化新手指引） */
+@keyframes spotlight-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1.5px rgba(228, 214, 182, 0.72),
+      0 0 28px rgba(228, 214, 182, 0.34),
+      inset 0 0 22px rgba(228, 214, 182, 0.10);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(255, 248, 232, 0.95),
+      0 0 52px rgba(228, 214, 182, 0.52),
+      inset 0 0 32px rgba(228, 214, 182, 0.20);
+  }
+}
+
 /* 主体区域内部可滚动（长表单 / 长说明用） */
 .screen-scroll {
   flex: 1 1 0%;

@@ -6,7 +6,6 @@ import { TalentMatrix } from '../dashboard/TalentMatrix'
 import {
   FortuneCard,
   FortuneDimensions,
-  TransitScale,
   fortuneText,
   localFortune,
   type FortuneScope,
@@ -18,7 +17,12 @@ import { MbtiHub } from '../dashboard/MbtiHub'
 import { AstrologyDrawer } from '../dashboard/AstrologyDrawer'
 import { AuroraBackdrop } from '../dashboard/AuroraBackdrop'
 import { TarotOverlay } from '../dashboard/TarotOverlay'
-import { SpaceGuide } from '../dashboard/SpaceGuide'
+import { SpotlightTutorial } from '../dashboard/SpotlightTutorial'
+import { AdvantagePractice } from '../dashboard/AdvantagePractice'
+import { CareerAdvice } from '../dashboard/CareerAdvice'
+import { TelescopeGlyph, CycleGlyph } from '../common/AstroGlyphs'
+import { postCareerAdvice, type CareerAdviceResult } from '../../lib/api'
+import type { AdvantageState } from '../../lib/advantage'
 import {
   ParallaxBackdrop,
   ParallaxCard,
@@ -26,6 +30,12 @@ import {
   ParallaxSpace,
 } from '../dashboard/ParallaxSpace'
 import { blendedTheme } from '../../data/elementThemes'
+import {
+  SunGlyph,
+  MoonGlyph,
+  AscendantGlyph,
+  signGlyphComponent,
+} from '../common/AstroGlyphs'
 import { MBTI_TYPES } from '../../data/mbtiTypes'
 import { useApp } from '../../store/AppContext'
 import {
@@ -64,18 +74,35 @@ interface DashboardStageProps {
   chart: Chart
   onRestart: () => void
   onEditMbti: () => void
+  /** v17.0：打开「出生那天的真实宇宙」回看页 */
+  onOpenBirthSky?: () => void
 }
 
 /** 可展开的覆盖层面板 */
-type Overlay = 'mbti' | 'talent' | 'fortune' | 'history' | 'chat' | null
+type Overlay =
+  | 'mbti'
+  | 'talent'
+  | 'advantage'
+  | 'fortune'
+  | 'history'
+  | 'chat'
+  | null
 
 /** 布局槽位 */
 type SlotId = Exclude<Overlay, null> | 'tip'
+
+/** 大三星专用矢量图标映射（v17.0） */
+const BIG_THREE_ICON = {
+  太阳: SunGlyph,
+  月亮: MoonGlyph,
+  上升: AscendantGlyph,
+} as const
 
 export function DashboardStage({
   chart,
   onRestart,
   onEditMbti,
+  onOpenBirthSky,
 }: DashboardStageProps) {
   const { state, dispatch } = useApp()
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -96,14 +123,14 @@ export function DashboardStage({
   )
   const mbti = state.mbti as MbtiProfile | null
 
-  const year = useMemo(() => fortuneText(chart, 'year'), [chart])
-  const month = useMemo(() => fortuneText(chart, 'month'), [chart])
+  /* v17.0：运势只讲今天 —— 年度 / 月度变量已删除 */
   const day = useMemo(() => fortuneText(chart, 'day'), [chart])
 
   /* ---------- 四维运势（AI 优先，本地兜底） ---------- */
+  /* v17.0：只保留「今天」这一份运势 */
   const [fortunes, setFortunes] = useState<
     Record<FortuneScope, MultiFortuneResult | null>
-  >({ year: null, month: null, day: null })
+  >({ day: null })
 
   const loadFortune = useCallback(
     async (scope: FortuneScope) => {
@@ -184,11 +211,39 @@ export function DashboardStage({
   /* ---------- 打开运势面板时按需拉取四维运势 ---------- */
   useEffect(() => {
     if (overlay !== 'fortune') return
-    for (const scope of ['year', 'month', 'day'] as FortuneScope[]) {
-      if (!fortunes[scope]) void loadFortune(scope)
-    }
+    /* v17.0：只拉今天的，不再拉年度 / 月度 */
+    if (!fortunes.day) void loadFortune('day')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay])
+
+  /* ---------- v17.0 · AI 职位建议 ---------- */
+  const [career, setCareer] = useState<CareerAdviceResult | null>(null)
+  const [careerLoading, setCareerLoading] = useState(false)
+  const [careerError, setCareerError] = useState('')
+  /** 新手引导重看 */
+  const [guideReplay, setGuideReplay] = useState(false)
+
+  const requestCareer = useCallback(
+    async (advantage: AdvantageState) => {
+      setCareerLoading(true)
+      setCareerError('')
+      try {
+        const res = await postCareerAdvice({
+          chart,
+          mbti,
+          advantage,
+        })
+        setCareer(res)
+      } catch (e) {
+        setCareerError(
+          e instanceof Error ? e.message : '建议生成中断了，稍后再试。',
+        )
+      } finally {
+        setCareerLoading(false)
+      }
+    },
+    [chart, mbti],
+  )
 
   const bigThree = [
     { k: '太阳', s: chart.bigThree.sun.sign },
@@ -415,31 +470,103 @@ export function DashboardStage({
 
           <div className="flex items-center gap-6">
             {/* ---------- 右上角：三巨头星座图标 ---------- */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {bigThree.map((item) => (
-                <div
-                  key={item.k}
-                  title={`${item.k} · ${item.s.cn}`}
-                  className="flex flex-col items-center rounded-sm px-2.5 py-1.5 transition-colors duration-500 hover:bg-white/8"
-                  style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.10)' }}
-                >
-                  <span
-                    className="serif-title text-[clamp(1.375rem,1.7vw,2rem)] font-semibold leading-none"
+            <div
+              data-spot="bigthree"
+              className="flex items-center gap-2 sm:gap-3"
+            >
+              {/*
+               * v17.0：彻底废除 Unicode 星座符号（♈ ♉ ♊ …）。
+               *
+               * 旧版用字符渲染，在部分系统会变成**高饱和卡通圆圈**
+               * （正是用户反馈的「幼态紫色图标」），
+               * 而且颜色/字重完全不可控。
+               *
+               * 现在换成天文观测级矢量图标：
+               *   · 太阳 = 日轮与光芒（暖金）
+               *   · 月亮 = 蛾眉月（银蓝）
+               *   · 上升 = 地平线与升起之箭（暗金）
+               * 底衬统一为深空磨砂方块，1px 暗金描边。
+               */}
+              {bigThree.map((item) => {
+                const Icon = BIG_THREE_ICON[item.k]
+                const SignIcon = signGlyphComponent(item.s.cn)
+                const tint =
+                  item.k === '太阳'
+                    ? 'rgba(245, 194, 107, 0.92)'
+                    : item.k === '月亮'
+                      ? 'rgba(196, 214, 236, 0.92)'
+                      : 'rgba(228, 214, 182, 0.9)'
+                return (
+                  <div
+                    key={item.k}
+                    title={`${item.k} · ${item.s.cn}`}
+                    className="flex flex-col items-center rounded-sm px-2.5 py-1.5 transition-colors duration-500 hover:bg-white/8"
                     style={{
-                      color: theme.primary,
-                      textShadow: `0 0 18px ${theme.primary}99`,
+                      boxShadow: 'inset 0 0 0 1px rgba(228, 214, 182, 0.16)',
+                      background:
+                        'linear-gradient(160deg, rgba(10,15,28,0.55), rgba(6,9,18,0.35))',
                     }}
                   >
-                    {item.s.glyph}
-                  </span>
-                  <span className="mt-1 text-[clamp(0.625rem,0.68vw,0.8125rem)] font-semibold tracking-[0.12em] text-mist/85">
-                    {item.k}
-                  </span>
-                </div>
-              ))}
+                    <span
+                      className="flex items-center gap-1.5 leading-none"
+                      style={{
+                        filter: `drop-shadow(0 0 7px ${tint}55)`,
+                      }}
+                    >
+                      <Icon size={22} color={tint} />
+                      <SignIcon size={15} color="rgba(228, 214, 182, 0.62)" />
+                    </span>
+                    <span className="mt-1.5 text-[clamp(0.625rem,0.68vw,0.8125rem)] font-semibold tracking-[0.12em] text-mist/85">
+                      {item.k}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             <span className="hidden h-8 w-px bg-white/12 sm:block" />
+
+            {/* ---------- v17.0 · 出生那天的星空 / 丢掉烦恼 ---------- */}
+            <button
+              data-spot="birthsky"
+              onClick={() => onOpenBirthSky?.()}
+              className="birthsky-btn group flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full border-0 px-5 py-2.5"
+              style={{
+                background: 'rgba(12,18,32,0.62)',
+                border: '1px solid rgba(245,194,107,0.28)',
+                backdropFilter: 'blur(16px) saturate(150%)',
+              }}
+              title="回看哈勃在我生日那天拍下的真实宇宙，把烦恼丢进星空里"
+            >
+              <span
+                className="transition-transform duration-700 group-hover:scale-110"
+                style={{ color: '#f5c26b' }}
+              >
+                <TelescopeGlyph size={19} />
+              </span>
+              {/* 窄屏只留图标，避免顶栏被撑破 */}
+              <span className="hidden text-[clamp(0.8125rem,0.9vw,1rem)] font-semibold tracking-[0.1em] text-mist/88 lg:inline">
+                出生那天的星空 / 丢掉烦恼
+              </span>
+              <span className="text-[clamp(0.8125rem,0.9vw,1rem)] font-semibold tracking-[0.1em] text-mist/88 lg:hidden">
+                星空 / 烦恼
+              </span>
+            </button>
+
+            {/* ---------- v17.0 · 新手引导重看 ---------- */}
+            <button
+              onClick={() => setGuideReplay(true)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 text-[0.9375rem] font-bold transition-all duration-500 hover:scale-110"
+              style={{
+                background: 'rgba(12,18,32,0.62)',
+                border: '1px solid rgba(255,255,255,0.16)',
+                color: 'rgba(240,244,252,0.7)',
+              }}
+              title="新手引导"
+              aria-label="新手引导"
+            >
+              ?
+            </button>
 
             <button
               onClick={() => setDrawerOpen(true)}
@@ -512,6 +639,7 @@ export function DashboardStage({
               <div
                 ref={coreRef}
                 className="relative"
+                data-spot="astrolabe"
                 style={{
                   filter: `drop-shadow(0 0 46px ${theme.primary}33) drop-shadow(0 22px 60px rgba(0,0,0,0.62))`,
                 }}
@@ -541,6 +669,15 @@ export function DashboardStage({
               className="absolute"
               /* v11.0 · 任务 5：新手引导靠这个属性定位高亮框 */
               data-guide-id={o.id}
+              data-spot={
+                o.id === 'mbti'
+                  ? 'mbti'
+                  : o.id === 'talent'
+                    ? 'talent'
+                    : o.id === 'fortune'
+                      ? 'fortune'
+                      : undefined
+              }
               style={{
                 left: o.placed.layout.left,
                 top: o.placed.layout.top,
@@ -570,6 +707,7 @@ export function DashboardStage({
               className="absolute"
               /* v11.0 · 任务 5 */
               data-guide-id="tip"
+              data-spot="tip"
               style={{
                 left: tipCard.placed.layout.left,
                 top: tipCard.placed.layout.top,
@@ -596,6 +734,45 @@ export function DashboardStage({
           )}
         </main>
 
+        {/* ============================================================
+            v17.0 · 入口 1：核心悬浮卡片 —— 优势挖掘实践
+            放在 main 与 footer 之间，**不覆盖**中央星盘。
+            ============================================================ */}
+        <motion.button
+          data-spot="advantage-float"
+          onClick={() => setOverlay('advantage')}
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.1, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          className="group mx-auto flex shrink-0 items-center gap-5 rounded-[22px] border-0 px-8 py-4 text-left"
+          style={{
+            background:
+              'linear-gradient(120deg, rgba(245,194,107,0.13), rgba(12,18,32,0.78))',
+            border: '1px solid rgba(245,194,107,0.28)',
+            boxShadow:
+              '0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,194,107,0.12) inset',
+            backdropFilter: 'blur(20px) saturate(155%)',
+          }}
+        >
+          <span style={{ color: '#f5c26b' }}>
+            <CycleGlyph size={24} />
+          </span>
+          <span>
+            <span className="block text-[clamp(0.9375rem,1.05vw,1.2rem)] font-bold tracking-[0.14em] text-mist">
+              优势挖掘实践
+            </span>
+            <span className="mt-0.5 block text-[clamp(0.75rem,0.82vw,0.9375rem)] font-medium tracking-[0.08em] text-mist/55">
+              点亮你的优势飞轮 · 划掉不擅长的事 · 算出适合你的职位
+            </span>
+          </span>
+          <span
+            className="shrink-0 text-[clamp(1rem,1.2vw,1.35rem)] transition-transform duration-700 group-hover:translate-x-1.5"
+            style={{ color: '#f5c26b' }}
+          >
+            →
+          </span>
+        </motion.button>
+
         {/* ---------- 页脚 ---------- */}
         <footer className="shrink-0 pt-3 text-center">
           <p className="text-[clamp(0.6875rem,0.75vw,0.875rem)] font-semibold tracking-[0.26em] text-mist/50">
@@ -614,7 +791,12 @@ export function DashboardStage({
            首次进入主页时，逐个高亮四周的悬浮卡片，
            配一句话说明这个板块是干嘛的。
            ============================================================ */}
-      <SpaceGuide accent={theme.primary} />
+      {/* ---------- v17.0 · 游戏化聚光灯新手指引（6 步） ---------- */}
+      <SpotlightTutorial
+        force={guideReplay}
+        accent={theme.primary}
+        onDone={() => setGuideReplay(false)}
+      />
 
       {/* ---------- 展开覆盖层 ---------- */}
       <AnimatePresence>
@@ -625,11 +807,13 @@ export function DashboardStage({
                 ? 'MBTI 解码'
                 : overlay === 'talent'
                   ? '天赋解析'
-                  : overlay === 'fortune'
-                    ? '运势'
-                    : overlay === 'history'
-                      ? '往日运势'
-                      : '与智者对话'
+                  : overlay === 'advantage'
+                    ? '优势挖掘实践'
+                    : overlay === 'fortune'
+                      ? '今日运势'
+                      : overlay === 'history'
+                        ? '往日运势'
+                        : '与智者对话'
             }
             accent={theme.primary}
             onClose={() => setOverlay(null)}
@@ -649,112 +833,154 @@ export function DashboardStage({
                 mbti={mbti}
                 alwaysOpen
                 onResult={(t) => dispatch({ type: 'setTalent', talent: t })}
+                onGoAdvantage={() => setOverlay('advantage')}
               />
             )}
 
-            {overlay === 'fortune' && (
-              <div className="space-y-14">
-                {/* ---- 年度 ---- */}
-                <section>
-                  <FortuneCard
-                    subtitle={year.subtitle}
-                    title={year.title}
-                    body={year.body}
-                    index={0}
-                    accent={theme.primary}
-                  >
-                    <div className="mt-7 border-t border-white/10 pt-6">
-                      <FortuneDimensions
-                        result={fortunes.year}
-                        accent={theme.primary}
-                      />
-                    </div>
-                    <div className="mt-6 border-t border-white/10 pt-6">
-                      <TransitScale chart={chart} />
-                    </div>
-                  </FortuneCard>
-                </section>
+            {/* ---------- v17.0 · 优势挖掘实践 ---------- */}
+            {overlay === 'advantage' && (
+              <div data-spot="advantage-panel">
+                <AdvantagePractice
+                  accent={theme.primary}
+                  chart={chart}
+                  mbti={mbti}
+                  onRequestAdvice={requestCareer}
+                />
 
-                {/* ---- 月度 ---- */}
-                <section>
-                  <FortuneCard
-                    subtitle={month.subtitle}
-                    title={month.title}
-                    body={month.body}
-                    index={1}
-                    accent={theme.secondary}
+                {/* ---------- AI 职位建议结果 ---------- */}
+                {careerLoading && (
+                  <div className="mt-12 rounded-[22px] border px-8 py-12 text-center"
+                    style={{
+                      borderColor: `${theme.primary}33`,
+                      background: 'rgba(9,14,26,0.6)',
+                    }}
                   >
-                    <div className="mt-7 border-t border-white/10 pt-6">
-                      <FortuneDimensions
-                        result={fortunes.month}
-                        accent={theme.secondary}
-                      />
-                    </div>
-                    {/*
-                      v11.0 · 任务 3：去占星术语化。
-                      旧版：「水星 · 双子座 · 第 9 宫 · 逆行」——
-                      这行字对占星爱好者是速记，对普通用户是乱码。
-                      现在只说它在**做什么**。
-                    */}
-                    <div className="mt-6 space-y-2.5 border-t border-white/10 pt-6">
-                      <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/50">
-                        本 月 的 四 份 力 量
-                      </p>
-                      {chart.planets.slice(0, 4).map((p) => (
-                        <p
-                          key={p.planet}
-                          className="text-[15.5px] font-medium leading-[1.6] text-mist/70"
-                        >
-                          {planetPlain(p.planetCn, p.retrograde)} ——{' '}
-                          {housePlain(p.house)}，带着{p.sign.cn}的劲。
-                        </p>
-                      ))}
-                    </div>
-                  </FortuneCard>
-                </section>
+                    <p
+                      className="text-[clamp(1rem,1.2vw,1.3rem)] font-semibold tracking-[0.14em] text-mist/85"
+                    >
+                      正在结合你的星盘与优势链条推演…
+                    </p>
+                    <p className="mt-2 text-[clamp(0.8125rem,0.9vw,1rem)] font-medium tracking-[0.08em] text-ink-mute">
+                      稍等几十秒
+                    </p>
+                  </div>
+                )}
 
-                {/* ---- 每日 ---- */}
-                <section>
-                  <FortuneCard
-                    subtitle={day.subtitle}
-                    title={day.title}
-                    body={day.body}
-                    index={2}
-                    accent={theme.primary}
+                {careerError && (
+                  <div
+                    className="mt-12 rounded-[22px] border px-8 py-8 text-center"
+                    style={{
+                      borderColor: 'rgba(232,138,120,0.35)',
+                      background: 'rgba(28,14,14,0.4)',
+                    }}
                   >
-                    <div className="mt-7 border-t border-white/10 pt-6">
-                      <FortuneDimensions
-                        result={fortunes.day}
-                        accent={theme.primary}
-                      />
-                    </div>
-                    <div className="mt-6 border-t border-white/10 pt-6">
-                      {/* v11.0 · 任务 3：相位术语换成白话 */}
-                      <p className="serif-body text-[16px] font-semibold leading-[1.6] text-mist/80">
-                        {chart.aspects[0]
-                          ? `今天你身上有两种力量在互相拉扯：${
-                              aspectPlain(chart.aspects[0].aCn ?? chart.aspects[0].a)
-                            }和${
-                              aspectPlain(chart.aspects[0].bCn ?? chart.aspects[0].b)
-                            }。`
-                          : '今天你身上的力量很统一，没有互相拉扯。'}
-                        {chart.aspects[0]
-                          ? '天空安静的时候，正好听听自己。'
-                          : '安静的一天，留给自己。'}
-                      </p>
-                      <button
-                        onClick={handleRecordFortune}
-                        className="mt-5 border-0 bg-transparent pb-0.5 text-[15px] font-bold tracking-[0.28em] text-mist/70 transition-colors duration-700 hover:text-mist focus:outline-none"
-                      >
-                        存入往日运势 →
-                      </button>
-                    </div>
-                  </FortuneCard>
-                </section>
+                    <p className="text-[clamp(0.9375rem,1.05vw,1.125rem)] font-medium text-mist/80">
+                      {careerError}
+                    </p>
+                  </div>
+                )}
+
+                {career && !careerLoading && (
+                  <div className="mt-12">
+                    <CareerAdvice result={career} accent={theme.primary} />
+                  </div>
+                )}
               </div>
             )}
 
-            {overlay === 'history' && (
+            {/*
+             * v17.0 · 今日运势（彻底纯粹化）
+             *
+             * 100% 只讲今天这 24 小时：
+             *   · 今日整体状态基调
+             *   · 事业学业 / 财富 / 健康 / 感情 四个维度的当日提醒
+             *   · 今天最该做的一件具体小事
+             *
+             * 年度运势、月度运势、「前半月 vs 后半月」、
+             * 「本月四股力量」全部删除 —— 一个不留。
+             */}
+            {overlay === 'fortune' && (
+              <div className="space-y-12">
+                <FortuneCard
+                  subtitle={day.subtitle}
+                  title={day.title}
+                  body={day.body}
+                  index={0}
+                  accent={theme.primary}
+                >
+                  <div className="mt-7 border-t border-white/10 pt-6">
+                    <FortuneDimensions
+                      result={fortunes.day}
+                      accent={theme.primary}
+                    />
+                  </div>
+
+                  <div className="mt-6 border-t border-white/10 pt-6">
+                    {/* 相位术语换成白话 */}
+                    <p className="serif-body text-[16px] font-semibold leading-[1.6] text-mist/80">
+                      {chart.aspects[0]
+                        ? `今天你身上有两种力量在互相拉扯：${
+                            aspectPlain(
+                              chart.aspects[0].aCn ?? chart.aspects[0].a,
+                            )
+                          }和${
+                            aspectPlain(
+                              chart.aspects[0].bCn ?? chart.aspects[0].b,
+                            )
+                          }。`
+                        : '今天你身上的力量很统一，没有互相拉扯。'}
+                      {chart.aspects[0]
+                        ? '天空安静的时候，正好听听自己。'
+                        : '安静的一天，留给自己。'}
+                    </p>
+
+                    {/*
+                     * v17.0 · 今天在走的能量
+                     *
+                     * 只列**有据可依**的项：
+                     *   · 逆行的行星（会反复、会往回收）
+                     *   · 有明确白话映射的行星
+                     * 认不出的行星直接跳过 —— 绝不用废话凑数。
+                     */}
+                    {(() => {
+                      const items = chart.planets
+                        .map((p) => ({
+                          cn: p.planetCn,
+                          text: planetPlain(p.planetCn, p.retrograde),
+                          house: housePlain(p.house),
+                        }))
+                        .filter((x) => x.text)
+                      if (items.length === 0) return null
+                      return (
+                        <div className="mt-6 space-y-2.5 border-t border-white/10 pt-6">
+                          <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/50">
+                            今 天 在 走 的 能 量
+                          </p>
+                          {items.map((x) => (
+                            <p
+                              key={x.cn}
+                              className="text-[15.5px] font-medium leading-[1.6] text-mist/70"
+                            >
+                              {x.text}
+                              {x.house ? ` —— ${x.house}` : ''}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    })()}
+
+                    <button
+                      onClick={handleRecordFortune}
+                      className="mt-5 border-0 bg-transparent pb-0.5 text-[15px] font-bold tracking-[0.28em] text-mist/70 transition-colors duration-700 hover:text-mist focus:outline-none"
+                    >
+                      存入往日运势 →
+                    </button>
+                  </div>
+                </FortuneCard>
+              </div>
+            )}
+
+                        {overlay === 'history' && (
               <HistoryPanel days={state.profile.days} element={element} />
             )}
 
@@ -995,9 +1221,17 @@ const HOUSE_PLAIN: Record<number, string> = {
   12: '你独自消化的部分',
 }
 
-/** 宫位 → 白话短语 */
+/**
+ * 宫位 → 白话短语。
+ *
+ * v17.0：加严空值校验 ——
+ * 旧版 `HOUSE_PLAIN[house] ?? '你的人生里的一块'` 在 house 为 NaN 时
+ * 会落到兜底文案，用户看到的是一句莫名其妙的话。
+ * 现在拿不到有效宫位就返回空串，调用方直接不渲染这一段。
+ */
 function housePlain(house: number): string {
-  return HOUSE_PLAIN[house] ?? '你的人生里的一块'
+  if (!Number.isFinite(house)) return ''
+  return HOUSE_PLAIN[house] ?? ''
 }
 
 /**
@@ -1005,8 +1239,17 @@ function housePlain(house: number): string {
  *
  * 重点是「逆行」—— 这是最容易被误解的术语，
  * 用户常以为它是不祥的，其实只是「能量往回收、事情反复」。
+ *
+ * v17.0 · undefined 根治：
+ *   旧版 `base[planetCn] ?? planetCn` 在 planetCn 为 undefined 时
+ *   会把 `undefined` 原样拼进模板字符串 ——
+ *   于是页面出现「undefined正往外走」这种脏文本。
+ *
+ *   现在：认不出就直接返回空串，调用方不渲染。
+ *   宁可少一句，也不让 undefined 出现在用户眼前。
  */
-function planetPlain(planetCn: string, retrograde: boolean): string {
+function planetPlain(planetCn: string | undefined, retrograde: boolean): string {
+  if (!planetCn) return ''
   const base: Record<string, string> = {
     太阳: '你的主心骨',
     月亮: '你的情绪',
@@ -1016,7 +1259,9 @@ function planetPlain(planetCn: string, retrograde: boolean): string {
     木星: '你的扩张力',
     土星: '你的耐力',
   }
-  const label = base[planetCn] ?? planetCn
+  const label = base[planetCn]
+  /* 认不出的行星直接不显示 —— 绝不把原文拼出来 */
+  if (!label) return ''
   return retrograde ? `${label}在往回收` : `${label}正往外走`
 }
 

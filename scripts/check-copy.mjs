@@ -318,6 +318,262 @@ console.log('\n【文案校验 · v16.0】\n')
 }
 
 /* ============================================================
+ *  规则七（v17.0）：undefined 脏模板零残留
+ * ============================================================
+ *
+ *  【历史事故】
+ *  页面底部曾出现连续 4 行：
+ *    undefined正往外走 —— 你往上走的那条路...
+ *
+ *  根因：`base[planetCn] ?? planetCn` 在 planetCn 为 undefined 时，
+ *  把 undefined 原样拼进了模板字符串。
+ *
+ *  现在从两个层面拦：
+ *  1. 源码里不允许再出现这些脏文本；
+ *  2. 关键函数里必须有空值短路。
+ * ============================================================ */
+
+{
+  /* ---- 7.1 脏模板文本残留 ---- */
+  const DIRTY_TEMPLATES = [
+    'undefined正往外走',
+    'undefined在往回收',
+    'undefined ——',
+    '${undefined}',
+    'null正往外走',
+  ]
+
+  const dirtyHits = []
+  for (const f of files) {
+    const src = readFileSync(f, 'utf-8')
+    src.split(/\r?\n/).forEach((line, i) => {
+      /* 注释行不算 —— 注释里说明「这里曾经出过 undefined」不算违规 */
+      const trimmed = line.trim()
+      if (
+        trimmed.startsWith('*') ||
+        trimmed.startsWith('//') ||
+        trimmed.startsWith('/*')
+      ) {
+        return
+      }
+      for (const dirty of DIRTY_TEMPLATES) {
+        if (line.includes(dirty)) {
+          dirtyHits.push(
+            `${relative(root, f)}:${i + 1}  [脏模板]  ${line.trim().slice(0, 80)}`,
+          )
+        }
+      }
+    })
+  }
+  check(
+    '脏模板残留（undefined正往外走 等）',
+    dirtyHits.length === 0,
+    dirtyHits.slice(0, 12).join('\n      '),
+  )
+
+  /* ---- 7.2 planetPlain 必须有空值短路 ---- */
+  const dashPath = resolve(root, 'src', 'components', 'stages', 'DashboardStage.tsx')
+  if (existsSync(dashPath)) {
+    const dash = readFileSync(dashPath, 'utf-8')
+    const fnMatch = dash.match(
+      /function planetPlain\([\s\S]*?\n\}/,
+    )
+    const fn = fnMatch?.[0] ?? ''
+    check(
+      'planetPlain() 存在且有 undefined 短路',
+      fn.length > 0 && /if\s*\(\s*!\s*planetCn\s*\)\s*return\s*''/.test(fn),
+      'planetPlain 必须先判空再返回 —— 否则 undefined 会被拼进模板字符串',
+    )
+  }
+}
+
+/* ============================================================
+ *  规则八（v17.0）：今日运势彻底纯粹化
+ * ============================================================ */
+
+{
+  const cardPath = resolve(root, 'src', 'components', 'dashboard', 'FortuneCard.tsx')
+  const card = readFileSync(cardPath, 'utf-8')
+  check(
+    'FortuneScope 只剩 day',
+    /export type FortuneScope\s*=\s*'day'/.test(card),
+    "FortuneScope 必须收窄为 'day' —— 年度/月度运势已下线",
+  )
+  check(
+    'SCOPE_META 只剩 day 一项',
+    !/label:\s*'年度运势'/.test(card) && !/label:\s*'月度运势'/.test(card),
+    'SCOPE_META 里还残留年度 / 月度运势',
+  )
+
+  const dashPath = resolve(root, 'src', 'components', 'stages', 'DashboardStage.tsx')
+  const dash = readFileSync(dashPath, 'utf-8')
+  check(
+    '前端不再渲染年度 / 月度运势面板',
+    !/fortunes\.year/.test(dash) && !/fortunes\.month/.test(dash),
+    'DashboardStage 还在渲染 fortunes.year / fortunes.month',
+  )
+  check(
+    '只拉取今日运势',
+    /loadFortune\('day'\)/.test(dash),
+    "打开运势面板时只应调用 loadFortune('day')",
+  )
+}
+
+/* ============================================================
+ *  规则九（v17.0）：NASA 生日星空 / 烦恼粉碎 / 优势挖掘 / 新手指引 全部挂载
+ * ============================================================ */
+
+{
+  /* ---- 9.1 组件文件存在 ---- */
+  const REQUIRED_COMPONENTS = [
+    ['src', 'data', 'hubbleBirthday.ts'],
+    ['src', 'components', 'stages', 'BirthSkyStage.tsx'],
+    ['src', 'components', 'common', 'AstroGlyphs.tsx'],
+    ['src', 'components', 'common', 'StarlightText.tsx'],
+    ['src', 'components', 'dashboard', 'SpotlightTutorial.tsx'],
+    ['src', 'components', 'dashboard', 'AdvantagePractice.tsx'],
+    ['src', 'components', 'dashboard', 'CareerAdvice.tsx'],
+    ['src', 'lib', 'advantage.ts'],
+  ]
+  for (const segs of REQUIRED_COMPONENTS) {
+    const p = resolve(root, ...segs)
+    check(`组件存在 ${segs.join('/')}`, existsSync(p), '文件缺失')
+  }
+
+  /* ---- 9.2 366 天映射完整 ---- */
+  const hbPath = resolve(root, 'src', 'data', 'hubbleBirthday.ts')
+  if (existsSync(hbPath)) {
+    const hb = readFileSync(hbPath, 'utf-8')
+    const dayCount = (hb.match(/["']?month["']?\s*:\s*\d+/g) ?? []).length
+    check(
+      `哈勃生日映射覆盖 366 天（当前 ${dayCount}）`,
+      dayCount >= 366,
+      '366 天每天都要有图 —— 少一天就有用户看到裂图',
+    )
+  }
+
+  /* ---- 9.3 本地图片资源存在 ---- */
+  const hubbleDir = resolve(root, 'public', 'hubble')
+  const jpgs = existsSync(hubbleDir)
+    ? readdirSync(hubbleDir).filter((f) => f.endsWith('.jpg'))
+    : []
+  check(
+    `本地哈勃图片资源已就位（${jpgs.length} 张）`,
+    jpgs.length > 0,
+    'public/hubble 下没有 jpg —— 线上会裂图',
+  )
+
+  /* ---- 9.4 应用入口已挂载 ---- */
+  const appPath = resolve(root, 'src', 'App.tsx')
+  const app = readFileSync(appPath, 'utf-8')
+  check('App.tsx 挂载 BirthSkyStage', app.includes('BirthSkyStage'), '生日星空未接入路由')
+  check("App.tsx 存在 'birthsky' 路由", app.includes("'birthsky'"), "缺少 birthsky 路由")
+
+  const dashPath = resolve(root, 'src', 'components', 'stages', 'DashboardStage.tsx')
+  const dash = readFileSync(dashPath, 'utf-8')
+  check(
+    'DashboardStage 挂载 SpotlightTutorial',
+    dash.includes('SpotlightTutorial'),
+    '游戏化新手指引未挂载',
+  )
+  check(
+    'DashboardStage 挂载 AdvantagePractice',
+    dash.includes('AdvantagePractice'),
+    '优势挖掘实践未挂载',
+  )
+  check(
+    'DashboardStage 挂载 CareerAdvice',
+    dash.includes('CareerAdvice'),
+    'AI 职位建议未挂载',
+  )
+  check(
+    'DashboardStage 常驻「出生那天的星空 / 丢掉烦恼」入口',
+    /出生那天的星空|丢掉烦恼/.test(dash),
+    '缺少常驻入口按钮',
+  )
+
+  /* ---- 9.5 烦恼粉碎舱动效存在 ---- */
+  const birthPath = resolve(root, 'src', 'components', 'stages', 'BirthSkyStage.tsx')
+  if (existsSync(birthPath)) {
+    const birth = readFileSync(birthPath, 'utf-8')
+    check(
+      'BirthSkyStage 含「丢进宇宙」粒子化动效',
+      /丢进宇宙/.test(birth) && /粒子|particle|Particle/.test(birth),
+      '烦恼粉碎舱的核心交互缺失',
+    )
+    check(
+      'BirthSkyStage 含 Ken Burns 缩放推进',
+      /kenburns|kenBurns|KenBurns|scale/.test(birth),
+      '缺少电影感缩放推进',
+    )
+  }
+
+  /* ---- 9.6 优势链条五节点 ---- */
+  const advPath = resolve(root, 'src', 'lib', 'advantage.ts')
+  if (existsSync(advPath)) {
+    const adv = readFileSync(advPath, 'utf-8')
+    for (const node of ['识别优势', '优势与技能发展', '积极且有意义的体验', '提供发展机会', '积极的期望']) {
+      check(`优势链条节点「${node}」已定义`, adv.includes(node), '节点缺失')
+    }
+  }
+
+  /* ---- 9.7 后端 AI 职位建议接口 ---- */
+  const handler = readFileSync(
+    resolve(root, 'functions', '_lib', 'api-handler.js'),
+    'utf-8',
+  )
+  check(
+    '后端存在 /api/career-advice 路由',
+    handler.includes('/api/career-advice'),
+    'AI 职位建议接口缺失',
+  )
+  const serverApp = readFileSync(resolve(root, 'server', 'app.mjs'), 'utf-8')
+  check(
+    'server/app.mjs 存在 /api/career-advice 路由',
+    serverApp.includes('/api/career-advice'),
+    '本地服务端缺少该路由',
+  )
+}
+
+/* ============================================================
+ *  规则十（v17.0）：文字过渡单向状态锁
+ * ============================================================ */
+
+{
+  const stPath = resolve(root, 'src', 'components', 'common', 'StarlightText.tsx')
+  const st = readFileSync(stPath, 'utf-8')
+  check(
+    'StarlightText 采用单向状态锁',
+    /entering/.test(st) && /exiting/.test(st) && /unmounted/.test(st),
+    '缺少 entering → visible → exiting → unmounted 状态机',
+  )
+  check(
+    'StarlightText 过渡时长 ≥ 1.4s',
+    /1\.4/.test(st),
+    '淡入淡出必须拉长到 1.4s',
+  )
+  const stCss = readFileSync(resolve(root, 'src', 'index.css'), 'utf-8')
+  const stBlock = stCss.slice(
+    stCss.indexOf('.starlight-enter'),
+    stCss.indexOf('.starlight-exit') + 200,
+  )
+  check(
+    'StarlightText 使用 cinematic 缓动',
+    /cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\)/.test(stBlock),
+    '缓动函数应为 cubic-bezier(0.22, 1, 0.36, 1)',
+  )
+  check(
+    'StarlightText 淡入淡出均为 1.4s',
+    (stBlock.match(/1\.4s/g) ?? []).length >= 2,
+    '进出都要 1.4s',
+  )
+
+  /* 全站居中 */
+  const css = readFileSync(resolve(root, 'src', 'index.css'), 'utf-8')
+  check('.screen-center 已定义', css.includes('.screen-center'), '缺少视口严格居中类')
+}
+
+/* ============================================================
  *  汇总
  * ============================================================ */
 

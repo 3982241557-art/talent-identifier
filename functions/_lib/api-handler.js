@@ -15,6 +15,7 @@
  *    POST /api/tip              每日灵感抽牌
  *    POST /api/tarot-reading    塔罗牌阵
  *    POST /api/fortune          四维运势
+ *    POST /api/career-advice    优势挖掘 · 职位与行动方向推演
  *    POST /api/chart            本命盘（纯 JS 星历）
  *    POST /api/transit          行运
  *
@@ -57,6 +58,12 @@ import {
 } from './deepseek-workers.js'
 import { computeChartWorkers } from './chart-workers.js'
 import { normalizeTalentPayload } from './talent-workers.js'
+import {
+  CAREER_SYSTEM_PROMPT,
+  buildCareerUserPrompt,
+  normalizeCareerPayload,
+  normalizeCareerResult,
+} from './career-workers.js'
 
 /* ============================================================
  *  基础工具
@@ -529,6 +536,30 @@ export async function handleApi(context) {
     /* ============================================================
      *  每日灵感抽牌
      * ============================================================ */
+    /* ============================================================
+     *  优势挖掘 · AI 职位与行动方向推演（v17.0）
+     * ============================================================ */
+    if (path === '/api/career-advice') {
+      const payload = normalizeCareerPayload(body)
+      try {
+        const raw = await callDeepSeekWorkers(
+          env,
+          [
+            { role: 'system', content: CAREER_SYSTEM_PROMPT },
+            { role: 'user', content: buildCareerUserPrompt(payload) },
+          ],
+          { temperature: 0.85, maxTokens: 2200, timeout: 60_000 },
+        )
+        const parsed = parseJson(raw)
+        return json(normalizeCareerResult(parsed))
+      } catch (err) {
+        return json(
+          { error: err?.message ?? '建议生成中断了。', code: err?.code ?? 'unknown' },
+          err?.statusCode ?? 500,
+        )
+      }
+    }
+
     if (path === '/api/tip') {
       const { chart, mbti, fortune } = body
       try {
@@ -644,33 +675,28 @@ export async function handleApi(context) {
      *  四维运势
      * ============================================================ */
     if (path === '/api/fortune') {
-      const { chart, mbti, scope = 'day' } = body
-      const SCOPE_GUIDE = {
-        year: {
-          label: '年度',
-          span: '未来 12 个月',
-          rule:
-            '这一年的主线趋势已经定下来了（可依据长期行运推导），' +
-            '请指出年内几个明显的转折节点（通常是季末或月初），' +
-            '并说明那段时间生活上会有什么具体变化。',
-        },
-        month: {
-          label: '月度',
-          span: '未来 30 天',
-          rule:
-            '这个月的重心每半个月会换一次（可依据月亮周期推导），' +
-            '请说明前半月与后半月分别更适合处理哪一类事情，' +
-            '以及哪些事情会自然退潮、不必强推。',
-        },
-        day: {
-          label: '每日',
-          span: '未来 7 天',
-          rule:
-            '今天的状态由当下的实际状态定调（可依据当日星象推导），' +
-            '请给出今天最值得注意的一个生活切面，以及一件具体的小事。',
-        },
+      const { chart, mbti } = body
+      /*
+       * v17.0 · 彻底纯粹化
+       *
+       * 【为什么砍掉年 / 月】
+       * 旧版运势面板把「年度运势」「月度运势」「前半月 vs 后半月」
+       * 混在一起，结果是：
+       *   · 每个格子的句式都一样（复读机凑版面）
+       *   · 用户在「今天该注意什么」的时候读到一堆长周期废话
+       *   · 四张卡长得一模一样，看不出差别
+       *
+       * 现在**只讲今天这 24 小时**。
+       * 用户打开运势唯一想知道的是：今天怎么样、今天做什么。
+       */
+      const guide = {
+        label: '今日',
+        span: '今天的 24 小时（从现在到今天结束）',
+        rule:
+          '只说今天。给出今天整体的状态基调，' +
+          '以及今天最该注意的一个生活切面和一件具体的小事。' +
+          '**绝对不许**出现「今年」「这个月」「本季度」「未来几天」这类长周期表述。',
       }
-      const guide = SCOPE_GUIDE[scope] ?? SCOPE_GUIDE.day
 
       const prompt = [
         `请为这位旅人做【${guide.label}运势】推演，覆盖以下四个维度：`,
@@ -688,6 +714,8 @@ export async function handleApi(context) {
         '  warning（需要留意的一点，≤ 55 字）。',
         '· **绝对禁止**吉凶断语与情绪评价（不写「运势」「大吉」「你会成功」）。',
         '· **绝对禁止**连接词：首先、其次、最后、总之、总的来说、值得注意的是。',
+        '· **绝对禁止**长周期表述：今年、本月、本周、这个季度、未来几天、年度。',
+        '  本运势 100% 只覆盖今天这 24 小时。',
         '',
         describeChart(chart),
         describeMbti(mbti),
@@ -719,13 +747,14 @@ export async function handleApi(context) {
           if (!v || typeof v !== 'object') return null
           if (!Array.isArray(v.dimensions)) return null
           return {
-            overview: scrub(typeof v.overview === 'string' ? v.overview : ''),
+            /* v17.0：scrubToToday 把长周期表述收回「今天」 */
+            overview: scrubToToday(scrub(typeof v.overview === 'string' ? v.overview : '')),
             dimensions: v.dimensions.map((d) => ({
               key: d?.key ?? '',
               label: d?.label ?? '',
-              summary: scrub(d?.summary ?? ''),
-              trend: scrub(d?.trend ?? ''),
-              warning: scrub(d?.warning ?? ''),
+              summary: scrubToToday(scrub(d?.summary ?? '')),
+              trend: scrubToToday(scrub(d?.trend ?? '')),
+              warning: scrubToToday(scrub(d?.warning ?? '')),
             })),
           }
         }
@@ -737,7 +766,7 @@ export async function handleApi(context) {
           /* 缺哪一版就用另一版顶上，保证切换时永远有内容 */
           const fallback = minShape ?? deepShape
           return json({
-            scope,
+            scope: 'day',
             label: guide.label,
             ...fallback,
             minimal: minShape ?? fallback,
@@ -750,17 +779,17 @@ export async function handleApi(context) {
           return json({ error: '模型返回的内容看不懂。' }, 502)
         }
         const single = {
-          overview: scrub(typeof parsed.overview === 'string' ? parsed.overview : ''),
+          overview: scrubToToday(scrub(typeof parsed.overview === 'string' ? parsed.overview : '')),
           dimensions: parsed.dimensions.map((d) => ({
             key: d?.key ?? '',
             label: d?.label ?? '',
-            summary: scrub(d?.summary ?? ''),
-            trend: scrub(d?.trend ?? ''),
-            warning: scrub(d?.warning ?? ''),
+            summary: scrubToToday(scrub(d?.summary ?? '')),
+            trend: scrubToToday(scrub(d?.trend ?? '')),
+            warning: scrubToToday(scrub(d?.warning ?? '')),
           })),
         }
         return json({
-          scope,
+          scope: 'day',
           label: guide.label,
           ...single,
           minimal: single,

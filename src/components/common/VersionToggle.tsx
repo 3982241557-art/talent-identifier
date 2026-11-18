@@ -52,6 +52,7 @@ export function VersionToggle({
   return (
     <div
       data-version-toggle
+      data-spot="version-toggle"
       className={className}
       role="tablist"
       aria-label="解读深度切换"

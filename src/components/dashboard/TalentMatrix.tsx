@@ -7,6 +7,7 @@ import type {
   TalentResult,
 } from '../../types'
 import { ELEMENT_THEMES } from '../../data/elementThemes'
+import { CycleGlyph } from '../common/AstroGlyphs'
 import { computeTalent } from '../../lib/talent'
 import { postTalent } from '../../lib/api'
 import {
@@ -30,6 +31,8 @@ interface TalentMatrixProps {
   onResult?: (result: TalentResult) => void
   /** 在覆盖层中始终展开（省略折叠开关） */
   alwaysOpen?: boolean
+  /** v17.0：跳转到「优势挖掘实践」面板 */
+  onGoAdvantage?: () => void
 }
 
 export function TalentMatrix({
@@ -37,6 +40,7 @@ export function TalentMatrix({
   mbti,
   onResult,
   alwaysOpen = false,
+  onGoAdvantage,
 }: TalentMatrixProps) {
   const [open, setOpen] = useState(false)
   const [extra, setExtra] = useState('')
@@ -619,6 +623,45 @@ export function TalentMatrix({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* ============================================================
+              v17.0 · 入口 2：底部引导横幅
+              从「看天赋」到「做实践」的强闭环。
+              ============================================================ */}
+          {onGoAdvantage && (
+            <div className="mt-12 border-t border-white/8 pt-9">
+              <button
+                onClick={onGoAdvantage}
+                className="talent-to-advantage group flex w-full items-center justify-between gap-6 rounded-[22px] border-0 px-8 py-7 text-left"
+                style={{
+                  background:
+                    'linear-gradient(120deg, rgba(245,194,107,0.15), rgba(8,13,26,0.5))',
+                  border: '1px solid rgba(245,194,107,0.26)',
+                  boxShadow: '0 16px 46px rgba(0,0,0,0.44)',
+                }}
+              >
+                <span className="flex items-center gap-5">
+                  <span style={{ color: '#f5c26b' }}>
+                    <CycleGlyph size={26} />
+                  </span>
+                  <span>
+                    <span className="block text-[clamp(1rem,1.2vw,1.35rem)] font-bold tracking-[0.08em] text-mist">
+                      看懂了你的天赋？去「优势挖掘实践」点亮你的优势链条
+                    </span>
+                    <span className="mt-1.5 block text-[clamp(0.8125rem,0.9vw,1rem)] font-medium tracking-[0.06em] text-mist/55">
+                      划掉不擅长的事，让 AI 帮你算出最适合干什么职位和副业
+                    </span>
+                  </span>
+                </span>
+                <span
+                  className="shrink-0 text-[clamp(1.125rem,1.4vw,1.6rem)] transition-transform duration-700 group-hover:translate-x-2"
+                  style={{ color: '#f5c26b' }}
+                >
+                  →
+                </span>
+              </button>
             </div>
           )}
         </motion.div>
