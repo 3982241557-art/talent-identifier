@@ -336,7 +336,23 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                   opacity: 0.92,
                 }}
               >
-                <GlyphIcon size={iconSize} color="rgba(228, 214, 182, 0.88)" />
+                {/*
+                 * ⚠️ 这个 <GlyphIcon> 必须带 key。
+                 *
+                 * 上面那个 <g> 带了 key → 它的 children 数组被 React 编译成
+                 * 「动态 children」（isStaticChildren = false）→
+                 * React 走 reconcileChildrenArray 路径，
+                 * 要求**数组里每一个元素都必须有 key**。
+                 *
+                 * 而 <GlyphIcon> 是组件引用（不是字面量 JSX 标签），
+                 * 本身就会让这个 children 数组变成动态的，
+                 * 所以即便它只有一个孩子，也必须显式给 key。
+                 */}
+                <GlyphIcon
+                  key={`sign-glyph-icon-${s.key}`}
+                  size={iconSize}
+                  color="rgba(228, 214, 182, 0.88)"
+                />
               </g>
               <text
                 key={`sign-label-${s.key}`}
