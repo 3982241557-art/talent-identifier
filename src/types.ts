@@ -244,6 +244,8 @@ export interface Verdict {
   coda: string
   /** 灵魂底色所依据的核心词 */
   keywords: string[]
+  /** v16.0：本地兜底的深度版速写（多段），保证双版本切换永远可用 */
+  deep?: string
 }
 
 /* ---------------- 天赋矩阵 ---------------- */

@@ -39,8 +39,14 @@ export function VerdictStage({
   /** 本地兜底（永远先算出来，避免闪烁） */
   const fallback = buildSoulPortrait(mbti, chart, place)
   const [text, setText] = useState(fallback.text)
-  /** v16.0：深度版速写（段落），极简版用 text */
-  const [deepText, setDeepText] = useState('')
+  /**
+   * v16.0：深度版速写（段落），极简版用 text
+   *
+   * v16.1：本地兜底也必须产出合格的深度版 ——
+   * 否则后端超时 / 降级时，双版本切换胶囊会整个消失，
+   * 用户就再也回不到「深度剖析版」了。
+   */
+  const [deepText, setDeepText] = useState(fallback.deep ?? '')
   /** v16.0：当前版本 */
   const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
 

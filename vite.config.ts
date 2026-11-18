@@ -115,8 +115,21 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       backendFallbackPlugin([preferredBackend, LOCAL_BACKEND]),
     ],
-    // 使用相对路径，便于以 file:// 或任意子路径部署
-    base: './',
+    /*
+     * v18.0 · GitHub Pages 部署
+     * ------------------------------------------------------------
+     * 【为什么必须改成绝对路径】
+     * 旧版用 `base: './'`（相对路径），是为了以 file:// 打开产物。
+     * 但 GitHub Pages 的站点根是
+     *   https://3982241557-art.github.io/talent-identifier/
+     * 相对路径在**多层路由**下会解析错（子目录被当成相对基准）。
+     *
+     * 绝对 base 与仓库名严格一致：
+     *   仓库  → 3982241557-art/talent-identifier
+     *   base  → /talent-identifier/
+     * 两边对不上就是白屏。
+     */
+    base: '/talent-identifier/',
     /*
      * v15.3 · 显式声明构建输出目录
      *

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { hubbleForBirthday, type HubbleBirthdayEntry } from '../../data/hubbleBirthday'
+import { publicUrl } from '../../lib/assets'
 
 /* ============================================================
  *  出生那天的真实宇宙（v17.0）
@@ -49,8 +50,37 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
     [month, day],
   )
 
-  /** 图片加载状态 —— 失败时降级为纯星云氛围，绝不裂图 */
-  const [imgOk, setImgOk] = useState(true)
+  /**
+   * 图片加载状态 —— 失败时降级为纯星云氛围，绝不裂图
+   *
+   * v17.3：背景图不能用 `<img>` 的 onError（那是 <img> 专属事件），
+   * div 的 onError 永远不会触发 —— 之前等于「坏了也看不见」。
+   * 改成用 `new Image()` 预加载 + onerror 判定，
+   * 加载成功才挂载背景层，失败就走纯星云降级。
+   */
+  const [imgOk, setImgOk] = useState(false)
+
+  /* ---------- 预加载影像 ---------- */
+  useEffect(() => {
+    const src = publicUrl(field.image)
+    if (!src) {
+      setImgOk(false)
+      return
+    }
+    let alive = true
+    setImgOk(false)
+    const probe = new Image()
+    probe.onload = () => {
+      if (alive) setImgOk(true)
+    }
+    probe.onerror = () => {
+      if (alive) setImgOk(false)
+    }
+    probe.src = src
+    return () => {
+      alive = false
+    }
+  }, [field.image])
 
   /** 烦恼输入 */
   const [worry, setWorry] = useState('')
@@ -111,13 +141,23 @@ export function BirthSky({ month, day, onEnter, onBack, accent }: BirthSkyProps)
             role="img"
             aria-label={`${field.title} —— ${field.en}`}
             style={{
-              backgroundImage: `url("${field.image}")`,
+              backgroundImage: `url("${publicUrl(field.image)}")`,
               filter: 'saturate(122%) contrast(104%) brightness(88%)',
               opacity: 0,
               animation:
                 'slowZoom 40s ease-in-out infinite alternate, kenburns-fade 1.6s ease-out forwards',
             }}
-            onError={() => setImgOk(false)}
+          />
+        )}
+
+        {/* ---------- 降级：影像未就绪时的纯星云氛围 ---------- */}
+        {!imgOk && (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(ellipse 70% 55% at 50% 45%, rgba(90,120,190,0.22) 0%, rgba(20,30,60,0.10) 45%, transparent 75%)',
+            }}
           />
         )}
 

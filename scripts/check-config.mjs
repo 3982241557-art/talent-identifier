@@ -299,66 +299,59 @@ let pagesOutDir = null
    */
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
   const deployScript = pkg.scripts?.deploy ?? ''
+  const cfDeployScript = pkg.scripts?.['deploy:cloudflare'] ?? ''
 
-  const deployFile = resolve(root, 'scripts', 'deploy.mjs')
-  if (existsSync(deployFile)) {
-    const src = readFileSync(deployFile, 'utf-8')
-
-    check(
-      'scripts/deploy.mjs 用 import.meta.url 定位仓库根（不依赖 cwd）',
-      src.includes('import.meta.url'),
-      '必须基于脚本自身位置推导仓库根 —— cwd 在 Cloudflare 上不保证是仓库根',
-    )
-
-    check(
-      'scripts/deploy.mjs 传了 --cwd',
-      src.includes("'--cwd'"),
-      '缺少 --cwd → wrangler 找不到 wrangler.toml → Missing entry-point',
-    )
-
-    check(
-      'scripts/deploy.mjs 传了 --assets（静态资源路径）',
-      src.includes("'--assets'"),
-      '缺少 --assets → 即使 toml 读不到也不知道静态资源在哪',
-    )
-
-    check(
-      'scripts/deploy.mjs 传了 --name（Worker 名）',
-      src.includes("'--name'"),
-    )
-
-    check(
-      'scripts/deploy.mjs 传了 --compatibility-date',
-      src.includes("'--compatibility-date'"),
-      '缺少它 → 不依赖 toml 顶层字段，避免 TOML 段归属陷阱',
-    )
-
-    check(
-      'scripts/deploy.mjs 真的调用了 wrangler deploy',
-      /wrangler['\s,]+deploy/.test(src),
-      '未调用 wrangler deploy → Cloudflare 只会显示绿色 Ready，但什么都没上传',
-    )
-
-    check(
-      'scripts/deploy.mjs 部署后验证了线上响应',
-      src.includes('Hello world'),
-      '应检测线上是否仍返回模板 Worker 的 "Hello world"',
-    )
-
-    check(
-      'scripts/deploy.mjs 打印了当前 commit（用于确认部署的是最新版本）',
-      src.includes('git rev-parse'),
-      '应打印 commit 号 —— 改完 Deploy command 后 Cloudflare 常会用旧 commit 重发布，' +
-        '报 "Cannot find module" 但文件其实早已 push',
-    )
-  } else {
-    check('scripts/deploy.mjs 存在', false, '缺失 —— 无法保证部署真的上传了内容')
-  }
+  /*
+   * v18.0 · 部署目标已切换到 GitHub Pages
+   * ------------------------------------------------------------
+   * Cloudflare / Vercel 在国内网络不可达，静态站点改由 GitHub Pages 托管。
+   *
+   * 契约：
+   *   npm run deploy        → predeploy(build) → gh-pages -d dist
+   *   npm run deploy:cloudflare → 保留原 wrangler 链路（随时可回退）
+   *
+   * 检查项随之调整：
+   *   · deploy 必须走 gh-pages
+   *   · predeploy 必须先 build（否则推的是上一次的旧产物）
+   *   · --nojekyll 必须带上（否则 Pages 会跑 Jekyll，_ 开头的目录被吞）
+   *   · 分支必须是 gh-pages
+   */
+  check(
+    'package.json 的 deploy 脚本走 gh-pages',
+    deployScript.includes('gh-pages') && deployScript.includes('-d dist'),
+    `deploy 脚本应把 dist/ 推到 gh-pages 分支，实际："${deployScript}"`,
+  )
 
   check(
-    `package.json 的 deploy 脚本 = "${deployScript}"`,
-    deployScript.includes('scripts/deploy.mjs'),
-    '部署脚本应指向 scripts/deploy.mjs',
+    'package.json 的 predeploy 脚本 = "npm run build"',
+    (pkg.scripts?.predeploy ?? '').includes('npm run build'),
+    '缺少 predeploy → 推上 gh-pages 的是上一次构建的旧产物',
+  )
+
+  check(
+    'gh-pages 发布带 --nojekyll',
+    deployScript.includes('--nojekyll'),
+    '缺少 --nojekyll → GitHub Pages 会启用 Jekyll，_headers 等下划线目录/文件被吞',
+  )
+
+  check(
+    'gh-pages 发布指定 gh-pages 分支',
+    /-b\s+gh-pages/.test(deployScript),
+    '缺少 -b gh-pages → 会推到默认分支，Pages 无从读取',
+  )
+
+  check(
+    'gh-pages 发布指定目标仓库',
+    /-r\s+https:\/\/github\.com\/3982241557-art\/talent-identifier/.test(
+      deployScript,
+    ),
+    '缺少 -r <repo> → 无法确定推到哪个仓库',
+  )
+
+  check(
+    'Cloudflare 发布链路保留在 deploy:cloudflare',
+    cfDeployScript.includes('scripts/deploy.mjs'),
+    '建议保留 deploy:cloudflare 作为回退通道',
   )
 
   /* 旧的 stub 必须已被移除 */
@@ -372,21 +365,19 @@ let pagesOutDir = null
 /* ---------- 4.7 · 部署脚本必须真正上传 ---------- */
 {
   /*
-   * v15.7 教训：
-   * v15.5 的 deploy-stub 只做校验然后 exit 0，
-   * Cloudflare 判定「发布成功」→ 状态显示绿色 Ready，
-   * 但**一个字节都没上传** ——
-   * 线上一直是创建项目时的 Hello World 模板。
+   * v18.0 · 部署目标改为 GitHub Pages
    *
-   * 症状极具迷惑性：绿色 Ready + 空白 body。
-   * 这里加一道防线：部署脚本必须真的调用 wrangler deploy。
+   * 旧检查针对 Cloudflare（deploy → scripts/deploy.mjs → wrangler deploy）。
+   * 现在静态站点由 GitHub Pages 托管，
+   * 但 **wrangler 链路仍需保留**（后端 API 还住在 Worker 上），
+   * 所以这里校验的是「两条链路都在」，而不是「只留一条」。
    */
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
-  const deployScript = pkg.scripts?.deploy ?? ''
+  const cfDeployScript = pkg.scripts?.['deploy:cloudflare'] ?? ''
   check(
-    `package.json 的 deploy 脚本 = "${deployScript}"`,
-    deployScript.includes('scripts/deploy.mjs'),
-    '部署脚本应指向 scripts/deploy.mjs —— 它会真正执行 wrangler deploy',
+    `package.json 的 deploy:cloudflare 脚本 = "${cfDeployScript}"`,
+    cfDeployScript.includes('scripts/deploy.mjs'),
+    'deploy:cloudflare 应指向 scripts/deploy.mjs —— 它会真正执行 wrangler deploy',
   )
 
   const deployFile = resolve(root, 'scripts', 'deploy.mjs')

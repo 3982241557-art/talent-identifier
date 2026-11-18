@@ -126,6 +126,7 @@ export function buildSoulPortrait(
       highlights: [],
       coda: '这只是此刻的你，明天可能就不一样了。',
       keywords: [],
+      deep: buildSoulDeep(null, _chart, place),
     }
   }
   const placeText = placeFactor(place)
@@ -154,7 +155,64 @@ export function buildSoulPortrait(
 
   const coda = '这只是此刻的你，明天可能就不一样了。'
 
-  return { text, highlights, coda, keywords: tags }
+  return { text, highlights, coda, keywords: tags, deep: buildSoulDeep(mbti, _chart, place) }
+}
+
+/**
+ * v16.0 · 本地深度版速写（多段）
+ *
+ * 为什么要本地生成：
+ *   · 后端 AI 有可能超时 / 返回格式错误 / 只给了极简版；
+ *   · 而「极简直给版 | 深度剖析版」的双版本切换胶囊
+ *     必须**永远**出现在解读面板顶部 —— 不能因为一次请求失败就消失；
+ *   · 所以本地引擎必须能独立产出合格的深度版文案。
+ *
+ * 硬性约束（与 /api/soul 一致）：
+ *   · 第二人称「你」
+ *   · 不出现任何占星术语
+ *   · 多段落（用 \n\n 分隔），与极简版形成明显字数反差
+ */
+export function buildSoulDeep(
+  mbti: MbtiProfile | null,
+  chart?: Chart | null,
+  place?: string,
+): string {
+  const info = mbti ? MBTI_TYPES[mbti.type] : null
+  const placeText = placeFactor(place)
+  const strength = info?.strengths?.[0] ?? '你擅长在纷乱里抓住重点'
+  const second = info?.strengths?.[1] ?? '你也耐得住重复与琐碎'
+  const blindspot = info?.blindspot ?? '你有时太相信自己的判断'
+  const growth = '多给人一点空间，也多给自己一点解释'
+
+  const paras: string[] = []
+
+  paras.push(
+    place
+      ? `你出生在${place}，那片水土给了你一副耐得住的骨架——${placeText}。`
+      : '你身上有一副耐得住的骨架，先稳，再快。',
+  )
+
+  paras.push(
+    mbti
+      ? `你是 ${mbti.type}${info?.nickname ? `，${info.nickname}` : ''}。${strength}；${second}。这两件事凑在一起，让你看上去比实际更可靠。`
+      : `${strength}；${second}。这两件事凑在一起，让你看上去比实际更可靠。`,
+  )
+
+  paras.push(
+    `不过你也有代价：${blindspot}。你很少在外人面前承认这一点，于是别人常常先误读你，再理解你。真正懂你的人，会觉得跟你相处省力——你不需要被反复解释。`,
+  )
+
+  paras.push(
+    `所以对你来说，关键在于${growth}。你适合被看见的方式，是被准确地理解；「被广泛地认可」这件事，反倒会让你失焦。`,
+  )
+
+  paras.push(
+    chart
+      ? '你出生那一刻的天象，已经被记在这张星盘里了。接下来那一页，会把它摊开给你看。'
+      : '这些只是此刻的你。往后那一页，才会把更具体的部分摊开给你看。',
+  )
+
+  return paras.join('\n\n')
 }
 
 /**
