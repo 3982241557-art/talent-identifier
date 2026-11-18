@@ -94,7 +94,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
         <circle cx={C} cy={C} r={rCore * 1.8} fill="url(#mock-core)" />
 
         {/* ---------- 宫位扇区（舞台） ---------- */}
-        <g>
+        <g key="mock-sectors">
           {Array.from({ length: 12 }, (_, i) => {
             const a1 = i * SECTOR
             const a2 = a1 + SECTOR
@@ -158,7 +158,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
         />
 
         {/* ---------- 十二宫刻度（外圈短线） ---------- */}
-        <g>
+        <g key="mock-ticks">
           {Array.from({ length: 72 }, (_, i) => {
             const lon = i * 5
             const isMajor = i % 6 === 0
@@ -182,7 +182,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
         </g>
 
         {/* ---------- 假星座符号（最外圈 · 戏服） ---------- */}
-        <g>
+        <g key="mock-signs">
           {FAKE_SIGNS.map((s) => {
             const p = toXY(s.lon, rSign)
             return (
@@ -203,7 +203,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
         </g>
 
         {/* ---------- 假行星符号（内圈 · 演员） ---------- */}
-        <g>
+        <g key="mock-planets">
           {FAKE_PLANETS.map((p, i) => {
             const pos = toXY(p.lon, rPlanet)
             return (
@@ -257,7 +257,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
         </g>
 
         {/* ---------- 中心相位连线（剧情） ---------- */}
-        <g>
+        <g key="mock-aspects">
           {FAKE_ASPECTS.map(([a, b], i) => {
             const p1 = toXY(a, rPlanet)
             const p2 = toXY(b, rPlanet)
@@ -291,7 +291,7 @@ export function MockAstrolabe({ accent = '#c9a86a', size = 320 }: MockAstrolabeP
              四个教学锚点 —— 发光圆点 + 引出线 + 序号
              与右侧文字说明一一对应。
              ============================================================ */}
-        <g>
+        <g key="mock-anchors">
           {ANCHORS.map((a) => {
             const p = toXY(a.lon, a.r)
             // 引出方向：指向画布外侧
