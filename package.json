@@ -27,7 +27,7 @@
     "build:cloudflare": "node scripts/cloud-build.mjs",
     "deploy:cloudflare": "node scripts/deploy.mjs",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -b gh-pages --nojekyll -m \"deploy: 发布到 GitHub Pages\" -r https://github.com/3982241557-art/talent-identifier.git",
+    "deploy": "gh-pages -d dist -b gh-pages --nojekyll -f --before-add ./scripts/gh-pages-cleanup.cjs -m \"deploy: 发布到 GitHub Pages\" -r https://github.com/3982241557-art/talent-identifier.git",
     "check:metafiles": "node scripts/check-metafiles.mjs",
     "check:copy": "node scripts/check-copy.mjs"
   },

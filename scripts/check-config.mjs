@@ -341,6 +341,18 @@ let pagesOutDir = null
   )
 
   check(
+    'gh-pages 发布强制无历史（-f）',
+    /-f\s/.test(deployScript),
+    '缺少 -f → gh-pages 分支会继承 main 的源码树（server/、.gitignore 等被一起推上线）',
+  )
+
+  check(
+    'gh-pages 发布带 --before-add 清理钩子',
+    deployScript.includes('--before-add'),
+    '缺少清理钩子 → .gitignore / server/.env.example 等源码碎片会混进 gh-pages 分支',
+  )
+
+  check(
     'gh-pages 发布指定目标仓库',
     /-r\s+https:\/\/github\.com\/3982241557-art\/talent-identifier/.test(
       deployScript,
