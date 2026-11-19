@@ -53,13 +53,36 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
    * 当星盘被缩到 200px 以下时，内层半径会变成负数 → SVG 报
    * `<circle> attribute r: A negative value is not valid`。
    * 比例化之后，无论星盘多小都不会出现负半径。
+   *
+   * v18.1：**分层拉开半径**。
+   *
+   * 旧版把「宫位数字」「星座符号」「星座中文名」「行星标签」
+   * 全都挤在 rSign ~ rPlanet 这一小段区间里，
+   * 于是 `9` `10` `11` 这些宫位数字会直接压在星座符号上。
+   *
+   * 现在每一类文字都有自己专属的一圈：
+   *   · rOuter    —— 外框刻度
+   *   · rSignGlyph—— 星座**符号**（矢量图标）
+   *   · rSignLabel—— 星座**中文名**（如「白羊」）
+   *   · rHouseNum —— 宫位**数字**
+   *   · rPlanet   —— 行星**圆点**
+   *   · rPlanetLbl—— 行星**文字标签**
+   *   · rInner    —— 内圈收口
    */
   const rOuter = Math.max(24, size * 0.5 - 6)
-  const rSign = Math.max(18, rOuter - size * 0.042)
-  const rHouse = Math.max(14, rSign - size * 0.018)
-  const rElement = Math.max(11, rHouse - size * 0.046)
-  const rPlanet = Math.max(9, rElement - size * 0.052)
-  const rInner = Math.max(6, rPlanet - size * 0.046)
+  /** 星座符号所在半径 */
+  const rSignGlyph = Math.max(18, rOuter - size * 0.036)
+  /** 星座中文名所在半径（比符号更靠内一圈） */
+  const rSignLabel = Math.max(15, rSignGlyph - size * 0.042)
+  /** 元素弧半径 */
+  const rElement = Math.max(11, rSignLabel - size * 0.03)
+  /** 宫位数字所在半径（元素弧之外一点，与星座名分开） */
+  const rHouseNum = Math.max(10, rElement - size * 0.032)
+  /** 行星圆点所在半径 */
+  const rPlanet = Math.max(9, rHouseNum - size * 0.046)
+  /** 行星文字标签所在半径（再往内一圈，彻底避开圆点与数字） */
+  const rPlanetLbl = Math.max(7, rPlanet - size * 0.042)
+  const rInner = Math.max(5, rPlanetLbl - size * 0.03)
   /** 中心圆盘半径 */
   const rCore = Math.max(4, rInner - size * 0.02)
 
@@ -159,6 +182,140 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
       .filter((a) => a.pct > 0)
   }, [chart.elements])
 
+  /**
+   * v18.1 · 行星防碰撞避让
+   *
+   * 【问题】
+   * 真实星历里，好几颗行星常常只差一两度
+   * （比如水星和太阳、金星和月亮），
+   * 直接按原黄经画，它们会叠成一坨糊字。
+   *
+   * 【解法】
+   * 1. **角度排斥**：按黄经排序后，让相邻两颗至少拉开 `MIN_GAP`（10°）。
+   *    挤在一起的一组会整体平移，保持彼此相对顺序不变。
+   * 2. **内外错层**：当一组的行星数量超过 3 颗（光靠角度已经排不开），
+   *    就把它们轮流放到**两个不同的半径**上，
+   *    文字和圆点自然就分开了。
+   *
+   * 结果：
+   *   · 每颗行星都有独立的显示位置
+   *   · 显示位置与真实黄经**顺序一致**（不会张冠李戴）
+   *   · 标签落在专属半径上，绝不压到宫位数字或星座名
+   */
+  const planetPlacements = useMemo(() => {
+    const MIN_GAP = 10
+
+    /* ---------- 1. 三大天体的黄经 ---------- */
+    const majors: Array<{
+      key: string
+      lon: number
+      cn: string
+      retrograde: boolean
+    }> = [
+      { key: 'sun', lon: chart.bigThree.sun.longitude, cn: '太阳', retrograde: false },
+      { key: 'moon', lon: chart.bigThree.moon.longitude, cn: '月亮', retrograde: false },
+      { key: 'rising', lon: chart.bigThree.rising.longitude, cn: '上升', retrograde: false },
+    ]
+
+    /* ---------- 2. 其余行星 ---------- */
+    const minors: Array<{
+      key: string
+      lon: number
+      cn: string
+      retrograde: boolean
+    }> = chart.planets.map((p) => ({
+      key: p.planet,
+      lon: p.longitude,
+      cn: p.planetCn,
+      retrograde: p.retrograde,
+    }))
+
+    /**
+     * 对一组黄经做「最小间隔」排斥。
+     * 返回每颗星**调整后的显示黄经**（与输入等长、同序）。
+     */
+    const spread = (group: Array<{ lon: number }>) => {
+      if (group.length <= 1) return group.map(() => 0)
+      /* 按黄经排序（保留原索引以便回填） */
+      const order = group
+        .map((g, i) => ({ i, lon: normLon(g.lon) }))
+        .sort((a, b) => a.lon - b.lon)
+
+      const out = new Array<number>(group.length).fill(0)
+      let prev = order[0].lon
+      out[order[0].i] = prev
+      for (let k = 1; k < order.length; k++) {
+        const cur = order[k].lon
+        /* 与前一颗至少拉开 MIN_GAP（允许越过 360°） */
+        const minAllowed = prev + MIN_GAP
+        const pushed = cur < minAllowed ? minAllowed : cur
+        out[order[k].i] = pushed
+        prev = pushed
+      }
+      return out
+    }
+
+    /* ---------- 3. 所有天体合在一起做排斥 ---------- */
+    const all = [...majors, ...minors]
+    const spreadAll = spread(all)
+
+    /* ---------- 4. 找出「挤在一起」的组，做内外错层 ---------- */
+    const sorted = all
+      .map((_p, i) => ({ i, lon: normLon(spreadAll[i]) }))
+      .sort((a, b) => a.lon - b.lon)
+
+    /** 每个天体的层：0 = 内圈，1 = 外圈 */
+    const tier = new Array<number>(all.length).fill(0)
+
+    let cluster: number[] = []
+    const flush = () => {
+      /* 簇内超过 3 颗 → 交错两层 */
+      if (cluster.length > 3) {
+        cluster.forEach((idx, k) => {
+          tier[idx] = k % 2
+        })
+      }
+      cluster = []
+    }
+
+    for (let k = 0; k < sorted.length; k++) {
+      if (k === 0) {
+        cluster = [sorted[k].i]
+        continue
+      }
+      const prevLon = sorted[k - 1].lon
+      const curLon = sorted[k].lon
+      /* 回绕时（最后一颗与第一颗）也算相邻 */
+      let gap = curLon - prevLon
+      if (k === sorted.length - 1) {
+        const wrap = normLon(prevLon - curLon)
+        if (wrap < 180) gap = wrap
+      }
+      if (gap < MIN_GAP * 1.6) {
+        cluster.push(sorted[k].i)
+      } else {
+        flush()
+        cluster = [sorted[k].i]
+      }
+    }
+    flush()
+
+    return all.map((p, i) => ({
+      ...p,
+      /** 显示用黄经（已做排斥） */
+      displayLon: spreadAll[i],
+      /** 0 → 内圈 rPlanet，1 → 外圈 rPlanetLbl */
+      tier: tier[i],
+    }))
+  }, [chart.bigThree, chart.planets])
+
+  /** 三大天体的视觉规格 */
+  const MAJOR_STYLE: Record<string, { color: string; r: number; glow: boolean }> = {
+    太阳: { color: '#fff4d0', r: 5, glow: true },
+    月亮: { color: '#cfe0f7', r: 4.4, glow: true },
+    上升: { color: theme.primary, r: 3.2, glow: false },
+  }
+
   return (
     <div
       className="relative select-none"
@@ -185,10 +342,17 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
        */}
       <SunMoonGlow
         key="sun-moon-glow"
-        chart={chart}
         size={size}
         toXY={toXY}
         rPlanet={rPlanet}
+        sunLon={
+          planetPlacements.find((p) => p.key === 'sun')?.displayLon ??
+          chart.bigThree.sun.longitude
+        }
+        moonLon={
+          planetPlacements.find((p) => p.key === 'moon')?.displayLon ??
+          chart.bigThree.moon.longitude
+        }
       />
 
       <svg
@@ -269,7 +433,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           key="ring-sign"
           cx={vcx}
           cy={vcy}
-          r={rSign}
+          r={rSignGlyph}
           fill="none"
           stroke="rgba(255,255,255,0.20)"
           strokeWidth="0.7"
@@ -278,7 +442,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           key="ring-house"
           cx={vcx}
           cy={vcy}
-          r={rHouse}
+          r={rHouseNum}
           fill="none"
           stroke="rgba(255,255,255,0.15)"
           strokeWidth="0.6"
@@ -311,10 +475,15 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           )
         })}
 
-        {/* 十二星座符号（自黄道 0° 起，每 30° 一个） */}
+        {/* 十二星座符号（自黄道 0° 起，每 30° 一个）
+            v18.1：符号与中文名**分居两圈** ——
+            符号在 rSignGlyph，中文名在更内侧的 rSignLabel，
+            两者再也不会挤在一起。 */}
         {SIGNS.map((s, i) => {
           const lon = i * 30 + 15
-          const { x, y } = toXY(lon, rSign)
+          const { x, y } = toXY(lon, rSignGlyph)
+          /* 中文名单独算一个坐标点 —— 半径更小，位置更靠内 */
+          const lp = toXY(lon, rSignLabel)
           const sColor = ELEMENT_THEMES[s.element].primary
           const GlyphIcon = signGlyphComponent(s.cn)
           const iconSize = size * 0.042
@@ -330,7 +499,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                */}
               <g
                 key={`sign-glyph-${s.key}`}
-                transform={`translate(${x - iconSize / 2} ${y - iconSize / 2 - size * 0.014})`}
+                transform={`translate(${x - iconSize / 2} ${y - iconSize / 2})`}
                 style={{
                   filter: `drop-shadow(0 0 5px ${sColor}55)`,
                   opacity: 0.92,
@@ -356,8 +525,8 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
               </g>
               <text
                 key={`sign-label-${s.key}`}
-                x={x}
-                y={y + size * 0.033}
+                x={lp.x}
+                y={lp.y}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={size * 0.0155}
@@ -376,7 +545,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
              在对应元素的星座区域旁引出锚点，悬浮即见含义
              ============================================================ */}
         {elementAnchors.map((a) => {
-          const from = toXY(a.lon, rSign)
+          const from = toXY(a.lon, rSignGlyph)
           const midR = rOuter + size * 0.022
           const endR = rOuter + size * 0.062
           const mid = toXY(a.lon, midR)
@@ -446,17 +615,19 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           )
         })}
 
-        {/* 十二宫分割线 + 宫位编号 */}
+        {/* 十二宫分割线 + 宫位编号
+            v18.1：宫位数字移到专属的 rHouseNum 一圈，
+            分割线只画到 rSignGlyph，不再穿过数字所在的层。 */}
         {houseStarts.map((lon, i) => {
           const ang = (90 - lon) * DEG
           const x1 = vcx + rInner * Math.cos(ang)
           const y1 = vcy - rInner * Math.sin(ang)
-          const x2 = vcx + rSign * Math.cos(ang)
-          const y2 = vcy - rSign * Math.sin(ang)
+          const x2 = vcx + rSignGlyph * Math.cos(ang)
+          const y2 = vcy - rSignGlyph * Math.sin(ang)
           // 宫位编号放在该宫中线
           const next = houseStarts[(i + 1) % 12]
           const mid = normLon(lon + ((next - lon + 360) % 360) / 2)
-          const { x, y } = toXY(mid, rHouse + 1)
+          const { x, y } = toXY(mid, rHouseNum)
           return (
             <g key={i}>
               <line
@@ -488,7 +659,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           const y1 = vcy - (rInner - 2) * Math.sin(ang)
           const x2 = vcx + (rOuter - 2) * Math.cos(ang)
           const y2 = vcy - (rOuter - 2) * Math.sin(ang)
-          const { x, y } = toXY(chart.risingLongitude + 4, rSign)
+          const { x, y } = toXY(chart.risingLongitude + 4, rSignLabel)
           return (
             <g key="asc-marker">
               <line
@@ -515,64 +686,49 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           )
         })()}
 
-        {/* 行星落点 */}
-        {(
-          [
-            {
-              lon: chart.bigThree.sun.longitude,
-              cn: '太阳',
-              color: '#fff4d0',
-              r: 5,
-              glow: true,
-            },
-            {
-              lon: chart.bigThree.moon.longitude,
-              cn: '月亮',
-              color: '#cfe0f7',
-              r: 4.4,
-              glow: true,
-            },
-            {
-              lon: chart.bigThree.rising.longitude,
-              cn: '上升',
-              color: theme.primary,
-              r: 3.2,
-              glow: false,
-            },
-          ] as const
-        ).map(({ lon, cn, color, r, glow }) => {
-          const { x, y } = toXY(lon, rPlanet)
-          return (
-            <g key={cn}>
-              <circle
-                cx={x}
-                cy={y}
-                r={r}
-                fill={color}
-                fillOpacity="0.96"
-                filter={glow ? 'url(#ast-soft-glow)' : 'url(#ast-glow)'}
-              />
-              <text
-                x={x}
-                y={y - r - 5}
-                textAnchor="middle"
-                fontSize={size * 0.0165}
-                fontWeight="700"
-                fill={color}
-                fillOpacity="0.95"
-                letterSpacing="0.08em"
-              >
-                {cn}
-              </text>
-            </g>
-          )
-        })}
+        {/* ============================================================
+             行星落点（v18.1 · 已做角度排斥 + 内外错层）
+             ============================================================ */}
+        {planetPlacements.map((p) => {
+          const isMajor = p.key === 'sun' || p.key === 'moon' || p.key === 'rising'
+          /* 错层：0 = 内圈，1 = 外圈（外圈更靠盘外，留出标签空间） */
+          const rDot = p.tier === 0 ? rPlanet : rPlanetLbl
+          const rText = p.tier === 0 ? rPlanet - size * 0.034 : rPlanetLbl - size * 0.034
+          const { x, y } = toXY(p.displayLon, rDot)
 
-        {chart.planets.map((p) => {
-          const { x, y } = toXY(p.longitude, rPlanet)
+          if (isMajor) {
+            const style = MAJOR_STYLE[p.cn]
+            return (
+              <g key={p.key}>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={style.r}
+                  fill={style.color}
+                  fillOpacity="0.96"
+                  filter={style.glow ? 'url(#ast-soft-glow)' : 'url(#ast-glow)'}
+                />
+                <text
+                  x={x}
+                  y={y - style.r - 5}
+                  textAnchor="middle"
+                  fontSize={size * 0.0165}
+                  fontWeight="700"
+                  fill={style.color}
+                  fillOpacity="0.95"
+                  letterSpacing="0.08em"
+                >
+                  {p.cn}
+                </text>
+              </g>
+            )
+          }
+
+          /* 其余行星 —— 文字落在专属半径上，绝不压到圆点 */
           const c = 'rgba(230,236,247,0.68)'
+          const tp = toXY(p.displayLon, rText)
           return (
-            <g key={p.planet}>
+            <g key={p.key}>
               <circle cx={x} cy={y} r={2.6} fill={c} />
               {p.retrograde && (
                 <circle
@@ -586,21 +742,24 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
                 />
               )}
               <text
-                x={x}
-                y={y + 10}
+                x={tp.x}
+                y={tp.y}
                 textAnchor="middle"
                 fontSize={size * 0.0145}
                 fontWeight="600"
                 fill="rgba(230,236,247,0.5)"
               >
-                {p.planetCn}
+                {p.cn}
                 {p.retrograde ? ' ᴿ' : ''}
               </text>
             </g>
           )
         })}
 
-        {/* 中心三巨头 */}
+        {/* 中心三巨头
+            v18.1：拉开「NATAL CHART」与大号星座名之间的间距 ——
+            原来两行只差 0.048 个 size，几乎贴在一起。
+            现在小标上移到 -0.062，大号星座名下移到 +0.016。 */}
         <g key="k0">
           <circle
             cx={vcx}
@@ -612,9 +771,9 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           />
           <text
             x={vcx}
-            y={vcy - size * 0.042}
+            y={vcy - size * 0.062}
             textAnchor="middle"
-            fontSize={size * 0.016}
+            fontSize={size * 0.0155}
             fontWeight="700"
             fill="rgba(240,244,252,0.6)"
             letterSpacing="0.34em"
@@ -623,7 +782,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           </text>
           <text
             x={vcx}
-            y={vcy + size * 0.006}
+            y={vcy + size * 0.018}
             textAnchor="middle"
             fontSize={size * 0.056}
             fontWeight="700"
@@ -636,7 +795,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           </text>
           <text
             x={vcx}
-            y={vcy + size * 0.042}
+            y={vcy + size * 0.052}
             textAnchor="middle"
             fontSize={size * 0.016}
             fontWeight="700"
@@ -647,7 +806,7 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
           </text>
           <text
             x={vcx}
-            y={vcy + size * 0.078}
+            y={vcy + size * 0.086}
             textAnchor="middle"
             fontSize={size * 0.0175}
             fontWeight="700"
@@ -710,18 +869,21 @@ export function Astrolabe({ chart, size = 620 }: AstrolabeProps) {
  *  绝不让光晕覆盖星盘刻度导致画面发灰。
  * ============================================================ */
 function SunMoonGlow({
-  chart,
   size,
   toXY,
   rPlanet,
+  sunLon,
+  moonLon,
 }: {
-  chart: Chart
   size: number
   toXY: (lon: number, radius: number) => { x: number; y: number }
   rPlanet: number
+  /** 排斥后的显示黄经（与行星圆点位置保持一致） */
+  sunLon: number
+  moonLon: number
 }) {
-  const sun = toXY(chart.bigThree.sun.longitude, rPlanet)
-  const moon = toXY(chart.bigThree.moon.longitude, rPlanet)
+  const sun = toXY(sunLon, rPlanet)
+  const moon = toXY(moonLon, rPlanet)
   const r = size * 0.13
   // viewBox 中心相对于容器左上角的偏移（容器边距 PAD）
   const pad = size * 0.075

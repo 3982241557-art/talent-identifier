@@ -297,14 +297,27 @@ export async function postMbtiQuestion(payload: {
  *  真实星历（v4.0）
  * ============================================================ */
 
-/** 后端 Swiss Ephemeris 返回的行星位置 */
+/**
+ * 后端返回的行星位置。
+ *
+ * v18.1：**两套后端的字段名不一样**，这里都认：
+ *   · Express 版 → `{ key, cn, ... }`
+ *   · Workers 版 → `{ planet, planetCn, ... }`
+ * 归一化在 `chart.ts / chartFromEphemeris` 里做。
+ */
 export interface EphemerisPlanet {
-  key: string
-  cn: string
-  glyph: string
+  /** Express 版字段 */
+  key?: string
+  /** Express 版字段 */
+  cn?: string
+  /** Workers 版字段 */
+  planet?: string
+  /** Workers 版字段 */
+  planetCn?: string
+  glyph?: string
   longitude: number
-  speed: number
-  retrograde: boolean
+  speed?: number
+  retrograde?: boolean
 }
 
 /** 后端 Swiss Ephemeris 返回的本命盘 */
@@ -317,8 +330,8 @@ export interface EphemerisChart {
   houseSystemName: string
   ascendant: number
   midheaven: number
-  armc: number
-  vertex: number
+  armc?: number
+  vertex?: number
   cusps: number[]
   planets: EphemerisPlanet[]
   aspects: Array<{

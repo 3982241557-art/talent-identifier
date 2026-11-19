@@ -367,11 +367,48 @@ export function chartFromEphemeris(
   mbti: MbtiProfile | null,
   hasTime: boolean,
 ): Chart {
-  const byKey = new Map(eph.planets.map((p) => [p.key, p]))
+  /**
+   * v18.1 · **后端契约兼容**
+   *
+   * 【问题】
+   * 两套后端返回的行星字段名不一样：
+   *   · Express 版（server/ephemeris.mjs）→ `{ key, cn, glyph, longitude }`
+   *   · Workers 版（functions/_lib/chart-workers.js）
+   *     → `{ planet, planetCn, glyph, longitude, sign, degree, house }`
+   *
+   * 前端只认 `key` / `cn`，于是线上（走 Workers）时：
+   *   · `byKey.get('sun')` 永远拿不到 → 太阳/月亮黄经退化成 0
+   *   · `p.cn` 为 undefined → 所有行星的中文名渲染成空白
+   *
+   * 【解法】
+   * 这里做一层**归一化**：两种字段名都认，
+   * 谁存在用谁 —— 前后端契约从此不再互相绑架。
+   */
+  const normPlanet = (
+    p: EphemerisChart['planets'][number],
+  ): {
+    key: string
+    cn: string
+    glyph: string
+    longitude: number
+    retrograde: boolean
+  } => ({
+    key: (p as { key?: string }).key ?? (p as { planet?: string }).planet ?? '',
+    cn:
+      (p as { cn?: string }).cn ??
+      (p as { planetCn?: string }).planetCn ??
+      '',
+    glyph: p.glyph ?? '',
+    longitude: p.longitude ?? 0,
+    retrograde: p.retrograde ?? false,
+  })
+
+  const rawPlanets = (eph.planets ?? []).map(normPlanet)
+  const byKey = new Map(rawPlanets.map((p) => [p.key, p]))
 
   const sunLon = byKey.get('sun')?.longitude ?? 0
   const moonLon = byKey.get('moon')?.longitude ?? 0
-  const risingLon = eph.ascendant
+  const risingLon = eph.ascendant ?? 0
 
   const sunSign = signOf(sunLon)
   const moonSign = signOf(moonLon)
@@ -380,7 +417,7 @@ export function chartFromEphemeris(
   const planets: PlanetPlacement[] = []
   const positions: Array<{ key: string; lon: number; cn: string }> = []
 
-  for (const p of eph.planets) {
+  for (const p of rawPlanets) {
     positions.push({ key: p.key, lon: p.longitude, cn: p.cn })
     if (p.key === 'sun' || p.key === 'moon') continue
     planets.push({
@@ -395,7 +432,7 @@ export function chartFromEphemeris(
     })
   }
 
-  const houses: House[] = eph.cusps.map((lon, i) => ({
+  const houses: House[] = (eph.cusps ?? []).map((lon, i) => ({
     house: i + 1,
     sign: signOf(lon),
     degree: degreeInSign(lon),

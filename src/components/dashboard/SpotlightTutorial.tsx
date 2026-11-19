@@ -44,6 +44,15 @@ export interface SpotlightStep {
   /** 目标说明（定位失败时的兜底文案） */
   fallback: string
   /**
+   * 这一步的**固定停靠方向**。
+   *
+   * v18.1：星盘在漂浮、卡片在轻微晃动，
+   * 如果每次测量都重新算落位，气泡就会在左右之间反复横跳。
+   * 所以每一步都写死一个方向（像相机的对焦锁），
+   * 只在「切换步骤」和「窗口 resize」时算一次坐标。
+   */
+  dock?: 'left' | 'right' | 'top' | 'bottom'
+  /**
    * 这一步需要先打开某个面板才能看到目标。
    *
    * v18.0：版本切换键已经顶置到**面板头**，
@@ -62,6 +71,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '外圈十二块是你人生的几件事，圆上那些点是行星的落点 —— 太阳管你外在的样子，月亮管你心情和习惯',
     selector: '[data-spot="astrolabe"]',
     fallback: '正中央那张圆盘',
+    dock: 'right',
   },
   {
     n: 2,
@@ -71,6 +81,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '太阳是你给别人看的那一面，月亮是你自己心里想要什么，上升是别人第一眼看你是什么印象',
     selector: '[data-spot="bigthree"]',
     fallback: '右上角的太阳 / 月亮 / 上升',
+    dock: 'bottom',
   },
   {
     n: 3,
@@ -80,6 +91,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '点开是哈勃在你生日那天拍下的真宇宙；看完可以把心里的负担写下来丢进星空',
     selector: '[data-spot="birthsky"]',
     fallback: '右上角「出生那天的星空 / 丢掉烦恼」',
+    dock: 'bottom',
   },
   {
     n: 4,
@@ -89,6 +101,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '比如你总习惯把话憋着、心里先想三遍才开口 —— 这就是它给你的解释',
     selector: '[data-spot="mbti"]',
     fallback: '左上的「MBTI 解码」卡片',
+    dock: 'right',
   },
   {
     n: 5,
@@ -106,6 +119,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
     selector: '[data-spot="panel-header"]',
     fallback: '面板右上角那两颗切换按钮',
     needsOverlay: 'mbti',
+    dock: 'bottom',
   },
   {
     n: 6,
@@ -115,6 +129,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '每块都写了「适合做什么」，还有一句可以马上练的小动作',
     selector: '[data-spot="talent"]',
     fallback: '右上的「天赋解析」卡片',
+    dock: 'left',
   },
   {
     n: 7,
@@ -124,6 +139,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '填满五个格子你就知道自己优势长什么样，再把不擅长的划掉，剩下的就是方向',
     selector: '[data-spot="advantage"]',
     fallback: '左下的「优势挖掘实践」卡片',
+    dock: 'right',
   },
   {
     n: 8,
@@ -133,6 +149,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
       '运势只讲今天这二十四小时；纠结的时候抽一张牌，跟自己聊两句',
     selector: '[data-spot="fortune"], [data-spot="tip"]',
     fallback: '右侧的「今日运势」与「每日灵感抽牌」',
+    dock: 'left',
   },
 ]
 
@@ -182,11 +199,39 @@ export function SpotlightTutorial({
   /** 当前步骤命中的**所有**目标矩形 */
   const [rects, setRects] = useState<TargetRect[]>([])
   /** 气泡的实际尺寸（用于避让计算） */
-  const [bubbleSize, setBubbleSize] = useState<BubbleSize>({ w: 380, h: 300 })
+  const [bubbleSize, setBubbleSize] = useState<BubbleSize>({ w: 420, h: 320 })
+  /** 视口宽度 —— 气泡宽度跟着视口走，窄屏自动收窄 */
+  const [viewportW, setViewportW] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1440,
+  )
   /** 气泡落位 */
   const [bubblePos, setBubblePos] = useState({ left: 24, top: 24 })
+  /** 冻结的锚点 —— 气泡位置只在它变化时重算 */
+  const [dock, setDock] = useState<{
+    anchor: TargetRect
+    rects: TargetRect[]
+  } | null>(null)
+  /** 收尾确认态 —— 最后一步点完成后展示 */
+  const [showOutro, setShowOutro] = useState(false)
 
   const bubbleRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * 【v18.1 · 防抖核心】
+   *
+   * 目标元素（星盘、卡片）一直在轻微浮动，
+   * 如果气泡位置跟着每帧重算，就会左右乱跳。
+   *
+   * 所以把两件事彻底分开：
+   *   · `rects` —— **遮罩挖洞**用的矩形，需要跟着目标实时走（否则洞会错位）；
+   *   · `bubblePos` —— **气泡落位**，只在三种时刻重算：
+   *       1. 切换步骤
+   *       2. 窗口 resize
+   *       3. 气泡自身尺寸确定（首次渲染后）
+   *     其余时间一律锁死。
+   */
+  /** resize 计数器 —— 窗口尺寸变化时 +1，触发落位重算 */
+  const [resizeTick, setResizeTick] = useState(0)
 
   const step = active !== null ? SPOTLIGHT_STEPS[active] : null
 
@@ -239,10 +284,11 @@ export function SpotlightTutorial({
   }, [active])
 
   /* ============================================================
-   *  测量目标位置
+   *  实时测量目标位置
    *
-   *  目标元素可能一直在动（卡片在浮动、星盘在轻微歪头），
-   *  所以除了初次测量，还要定期重测。
+   *  这份数据只喂给**遮罩挖洞**和**光晕** ——
+   *  它们必须紧跟目标，所以要持续更新。
+   *  注意：气泡位置**不**依赖它（见下面的「冻结锚点」）。
    * ============================================================ */
   useLayoutEffect(() => {
     if (active === null || !step) return
@@ -274,16 +320,84 @@ export function SpotlightTutorial({
     }
 
     measure()
-    window.addEventListener('resize', measure)
-    const timer = window.setInterval(measure, 500)
-    return () => {
-      window.removeEventListener('resize', measure)
-      window.clearInterval(timer)
-    }
+    const timer = window.setInterval(measure, 400)
+    return () => window.clearInterval(timer)
   }, [active, step])
 
   /* ============================================================
+   *  冻结锚点（v18.1 · 防抖核心）
+   *
+   *  气泡落位只在这里算，且**每一步只算一次**：
+   *   · 切换步骤 → 重新冻结
+   *   · 窗口 resize → 重新冻结
+   *
+   *  为什么要「等元素出现」：
+   *  第 5 步要讲面板头，而面板是异步打开的，
+   *  刚进这一步时 DOM 里还没有那个元素 ——
+   *  所以这里轮询一小会儿，一找到就锁死。
+   * ============================================================ */
+  useLayoutEffect(() => {
+    if (active === null || !step) {
+      setDock(null)
+      return
+    }
+
+    let locked = false
+
+    const tryLock = () => {
+      if (locked) return
+      const els = Array.from(
+        document.querySelectorAll<HTMLElement>(step.selector),
+      ).filter((el) => {
+        const r = el.getBoundingClientRect()
+        return r.width > 4 && r.height > 4
+      })
+      if (els.length === 0) return
+
+      const frozen = els.map((el) => {
+        const r = el.getBoundingClientRect()
+        return {
+          top: r.top,
+          left: r.left,
+          width: r.width,
+          height: r.height,
+        }
+      })
+      /* 主目标 —— 面积最大的那个 */
+      const anchor = frozen.reduce((a, b) =>
+        b.width * b.height > a.width * a.height ? b : a,
+      )
+
+      locked = true
+      setDock({ anchor, rects: frozen })
+    }
+
+    tryLock()
+    const timer = window.setInterval(tryLock, 120)
+    return () => window.clearInterval(timer)
+  }, [active, step, resizeTick])
+
+  /* ---------- 窗口 resize → 重新冻结 + 落位重算 ---------- */
+  useEffect(() => {
+    const onResize = () => {
+      setViewportW(window.innerWidth)
+      setResizeTick((t) => t + 1)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  /** 气泡宽度 —— 随视口自适应，但**只在 resize 时变** */
+  const bubbleWidth = useMemo(
+    () => Math.max(280, Math.min(420, viewportW - 48)),
+    [viewportW],
+  )
+
+  /* ============================================================
    *  测量气泡尺寸
+   *
+   *  宽度是**写死**的（bubbleSize.w），这里只测高度。
+   *  宽度写死 → 测量与渲染解耦 → 不会自反馈抖动。
    * ============================================================ */
   useLayoutEffect(() => {
     if (active === null) return
@@ -291,24 +405,36 @@ export function SpotlightTutorial({
     if (!el) return
     const r = el.getBoundingClientRect()
     if (r.width > 0 && r.height > 0) {
-      setBubbleSize({ w: r.width, h: r.height })
+      setBubbleSize((prev) =>
+        Math.abs(prev.h - r.height) > 1 ? { w: prev.w, h: r.height } : prev,
+      )
     }
   }, [active, step])
 
   /* ============================================================
-   *  计算气泡落位 —— 避开所有目标元素
+   *  计算气泡落位 —— 固定方向 + 一次性锁定
    * ============================================================ */
   useLayoutEffect(() => {
-    if (active === null) return
+    if (active === null || !dock || !step) return
     const vw = window.innerWidth
     const vh = window.innerHeight
-    setBubblePos(placeBubble(rects, bubbleSize, vw, vh))
-  }, [active, rects, bubbleSize])
+    setBubblePos(
+      placeBubble(
+        dock.rects,
+        { w: bubbleWidth, h: bubbleSize.h },
+        vw,
+        vh,
+        step.dock ?? 'right',
+      ),
+    )
+  }, [active, dock, bubbleSize, bubbleWidth, step])
 
-  /* ---------- 关闭 ---------- */
+  /* ---------- 关闭（真正收起整个教程） ---------- */
   const finish = useCallback(() => {
     setActive(null)
     setRects([])
+    setDock(null)
+    setShowOutro(false)
     try {
       localStorage.setItem(SEEN_KEY, '1')
     } catch {
@@ -317,17 +443,33 @@ export function SpotlightTutorial({
     onDone?.()
   }, [onDone])
 
+  /**
+   * 【v18.1】最后一步点「我知道了」时**不直接关闭**，
+   * 先切到收尾确认态 —— 让用户知道教程结束了、
+   * 以及以后还能从右上角的「?」重开。
+   */
+  const goOutro = useCallback(() => {
+    setShowOutro(true)
+    setRects([])
+    setDock(null)
+    try {
+      localStorage.setItem(SEEN_KEY, '1')
+    } catch {
+      /* 隐私模式：忽略 */
+    }
+  }, [])
+
   /* ---------- 下一步（一步一进） ---------- */
   const next = useCallback(() => {
     setActive((v) => {
       if (v === null) return v
       if (v >= SPOTLIGHT_STEPS.length - 1) {
-        finish()
+        goOutro()
         return null
       }
       return v + 1
     })
-  }, [finish])
+  }, [goOutro])
 
   const prev = useCallback(() => {
     setActive((v) => (v === null ? v : Math.max(v - 1, 0)))
@@ -401,7 +543,82 @@ export function SpotlightTutorial({
     return `M 0 0 H ${vw} V ${vh} H 0 Z ${cutoutPaths.join(' ')}`
   }, [cutoutPaths, vw, vh])
 
-  if (active === null) return null
+  if (active === null && !showOutro) return null
+
+  /* ============================================================
+   *  收尾确认态（v18.1）
+   *
+   *  最后一步点完不直接消失 —— 先给一句收尾，
+   *  顺便告诉用户以后能从右上角的「?」再打开。
+   * ============================================================ */
+  if (showOutro) {
+    return (
+      <div
+        className="fixed inset-0 z-[310] flex items-center justify-center px-6"
+        style={{
+          pointerEvents: 'auto',
+          background: 'rgba(4, 7, 14, 0.72)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+        }}
+        onClick={finish}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-[520px] rounded-[26px] border px-12 py-11 text-center"
+          style={{
+            borderColor: `${accent}44`,
+            background:
+              'linear-gradient(155deg, rgba(14,21,38,0.98), rgba(6,9,18,0.97))',
+            boxShadow: `0 34px 100px rgba(0,0,0,0.78), 0 0 0 1px ${accent}1f inset`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 完成标记 */}
+          <div
+            className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${accent}33, transparent 72%)`,
+              border: `1px solid ${accent}55`,
+            }}
+          >
+            <span
+              className="text-[1.75rem] font-bold leading-none"
+              style={{ color: accent }}
+            >
+              ✓
+            </span>
+          </div>
+
+          {/* 主文案 */}
+          <h3 className="serif-title mt-7 text-[clamp(1.375rem,1.9vw,1.875rem)] font-semibold tracking-[0.1em] text-mist">
+            准备好了，现在开始体验吧
+          </h3>
+
+          {/* 副提示 */}
+          <p className="serif-body mx-auto mt-4 max-w-[400px] text-[clamp(0.9375rem,1.05vw,1.0625rem)] font-medium leading-[1.85] text-mist/62">
+            之后如果忘了怎么用，随时点右上角的「?」图标，就能再次打开新手教程。
+          </p>
+
+          {/* 主按钮 */}
+          <button
+            onClick={finish}
+            className="mt-9 border-0 px-10 py-3.5 text-[0.9375rem] font-semibold tracking-[0.2em] transition-opacity duration-500 hover:opacity-88 focus:outline-none"
+            style={{
+              background: `linear-gradient(135deg, ${accent}, ${accent}bb)`,
+              color: '#05080f',
+              boxShadow: `0 12px 34px ${accent}44`,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            开始体验
+          </button>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
     /*
@@ -450,28 +667,27 @@ export function SpotlightTutorial({
         </defs>
       </svg>
 
-      {/* ---------- 压暗层（挖洞） ---------- */}
+      {/* ---------- 压暗层（挖洞） ----------
+          v18.1：透明度从 0.74 降到 0.55 ——
+          高亮某一块时，周围星盘和卡片仍能隐约看见轮廓，
+          用户一眼就知道「现在讲的这块在页面什么位置」。 */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background: 'rgba(3, 5, 8, 0.74)',
+          background: 'rgba(4, 7, 14, 0.55)',
           WebkitMask: `url(#${cssMaskId})`,
           mask: `url(#${cssMaskId})`,
         }}
       />
 
-      {/* ---------- 轻微模糊层（挖洞） ----------
-          洞里的元素保持锐利，洞外的一切轻轻虚化 ——
-          视线自然被吸到正在讲的那一处。 */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backdropFilter: 'blur(2.5px)',
-          WebkitBackdropFilter: 'blur(2.5px)',
-          WebkitMask: `url(#${cssMaskId})`,
-          mask: `url(#${cssMaskId})`,
-        }}
-      />
+      {/*
+        v18.1：**取消全屏模糊层**。
+
+        之前那层 `backdrop-filter: blur(2.5px)` 会把周围的星盘
+        和卡片糊成一片，用户就看不出「现在高亮的是页面上哪一块」。
+        现在只保留 0.55 的暗夜遮罩 ——
+        周围轮廓依然可辨，视线也能被吸过来。
+      */}
 
       {/* ============================================================
           原位高亮 —— 一团柔和的光晕
@@ -509,7 +725,7 @@ export function SpotlightTutorial({
       )}
 
       {/* ============================================================
-          气泡 —— 紧贴目标，自动避让，按钮长在里面
+          气泡 —— 紧贴目标，固定停靠方向，按钮长在里面
           ============================================================ */}
       <AnimatePresence mode="wait">
         {step && (
@@ -524,13 +740,15 @@ export function SpotlightTutorial({
             style={{
               left: bubblePos.left,
               top: bubblePos.top,
-              width: bubbleSize.w,
               pointerEvents: 'auto',
             }}
           >
             <div
               className="rounded-[20px] border px-7 py-6"
               style={{
+                /* 宽度写死 —— 测量与渲染解耦，避免宽度自反馈 */
+                width: bubbleWidth,
+                maxWidth: 'calc(100vw - 32px)',
                 borderColor: `${accent}44`,
                 background:
                   'linear-gradient(155deg, rgba(12,18,32,0.97), rgba(6,9,18,0.96))',
@@ -585,10 +803,15 @@ export function SpotlightTutorial({
                   控制区 —— 长在气泡内部
                   这样「跳过 / 上一步 / 下一步」永远跟着文案走，
                   绝不会压到页面上任何别的文字。
+
+                  v18.1：所有按钮强制**单行** ——
+                  `whitespace-nowrap` 防止文字内部换行，
+                  `flex-shrink-0` 防止被 flex 容器压扁换行。
+                  进度点那一组则允许收缩（它是装饰性的）。
                   ============================================================ */}
-              <div className="mt-6 flex items-center gap-3 border-t border-white/10 pt-5">
+              <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/10 pt-5">
                 {/* 进度点 */}
-                <div className="flex items-center gap-2">
+                <div className="flex shrink items-center gap-2">
                   {SPOTLIGHT_STEPS.map((s, i) => (
                     <button
                       key={s.n}
@@ -597,11 +820,12 @@ export function SpotlightTutorial({
                         setActive(i)
                       }}
                       aria-label={`第 ${i + 1} 步：${s.title}`}
-                      className="h-1.5 rounded-full transition-all duration-500"
+                      className="h-1.5 shrink-0 rounded-full transition-all duration-500"
                       style={{
                         width: active === i ? 26 : 9,
                         background: active === i ? accent : 'rgba(255,255,255,0.26)',
                         boxShadow: active === i ? `0 0 12px ${accent}99` : 'none',
+                        whiteSpace: 'nowrap',
                       }}
                     />
                   ))}
@@ -615,7 +839,7 @@ export function SpotlightTutorial({
                     finish()
                   }}
                   aria-label="跳过新手引导"
-                  className="border-0 bg-transparent px-2 py-2 text-[0.875rem] font-semibold tracking-[0.16em] text-mist/55 transition-opacity duration-500 hover:text-mist focus:outline-none"
+                  className="shrink-0 whitespace-nowrap border-0 bg-transparent px-2 py-2 text-[0.875rem] font-semibold tracking-[0.16em] text-mist/55 transition-opacity duration-500 hover:text-mist focus:outline-none"
                 >
                   跳过
                 </button>
@@ -626,7 +850,7 @@ export function SpotlightTutorial({
                       e.stopPropagation()
                       prev()
                     }}
-                    className="border-0 bg-transparent px-2 py-2 text-[0.875rem] font-semibold tracking-[0.16em] text-mist/55 transition-opacity duration-500 hover:text-mist focus:outline-none"
+                    className="shrink-0 whitespace-nowrap border-0 bg-transparent px-2 py-2 text-[0.875rem] font-semibold tracking-[0.16em] text-mist/55 transition-opacity duration-500 hover:text-mist focus:outline-none"
                   >
                     上一步
                   </button>
@@ -637,7 +861,7 @@ export function SpotlightTutorial({
                     e.stopPropagation()
                     next()
                   }}
-                  className="border-0 px-5 py-2.5 text-[0.875rem] font-semibold tracking-[0.16em] transition-opacity duration-500 hover:opacity-88 focus:outline-none"
+                  className="shrink-0 whitespace-nowrap border-0 px-5 py-2.5 text-[0.875rem] font-semibold tracking-[0.16em] transition-opacity duration-500 hover:opacity-88 focus:outline-none"
                   style={{
                     background: `linear-gradient(135deg, ${accent}, ${accent}bb)`,
                     color: '#05080f',
@@ -658,17 +882,31 @@ export function SpotlightTutorial({
 }
 
 /* ============================================================
- *  气泡落位算法
+ *  气泡落位算法（v18.1 · 固定方向 + 一次性锁定）
  *
- *  目标：从 8 个候选位置里挑一个「与所有目标元素重叠面积最小」的。
- *  这样气泡永远紧贴目标，又绝不会盖住它，更不会盖住
- *  目标附近的任何文字（按钮都在气泡里）。
+ *  【为什么要固定方向】
+ *  v18.0 是「八个候选位里挑重叠最小的那个」。
+ *  但目标元素一直在飘（星盘在歪头、卡片在浮动），
+ *  每次重算都可能在「右侧」和「左侧」之间来回跳 ——
+ *  用户看着就像气泡在屏幕两边弹来弹去。
+ *
+ *  【v18.1 的做法】
+ *  1. 每一步写死一个**首选停靠方向**（像相机的对焦锁）。
+ *  2. 候选位按**优先级顺序**排好：
+ *       首选方向 → 对侧方向 → 上下方向 → 四角兜底。
+ *     同一方向内再做三档纵向/横向微调。
+ *  3. 从头到尾只挑**第一个**不越界、且与目标重叠最小的。
+ *     —— 结果**一次算完就锁死**，绝不随动画帧翻转。
+ *
+ *  这样既保证了「同一步里气泡绝不左右横跳」，
+ *  又能在窄屏上优雅退让（首选方向放不下就退到对侧）。
  * ============================================================ */
 function placeBubble(
   rects: TargetRect[],
   size: BubbleSize,
   vw: number,
   vh: number,
+  dock: 'left' | 'right' | 'top' | 'bottom',
 ): { left: number; top: number } {
   const PAD = 16
   const GAP = 18
@@ -681,39 +919,59 @@ function placeBubble(
       ? rects.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a))
       : null
 
-  const candidates: Array<{ left: number; top: number }> = []
-
-  if (anchor) {
+  /** 按方向生成三个微调档位 */
+  const forDir = (
+    dir: 'left' | 'right' | 'top' | 'bottom',
+  ): Array<{ left: number; top: number }> => {
+    if (!anchor) return []
     const cx = anchor.left + anchor.width / 2
     const cy = anchor.top + anchor.height / 2
-    candidates.push(
-      /* 右侧 */
-      { left: anchor.left + anchor.width + GAP, top: anchor.top },
-      /* 左侧 */
-      { left: anchor.left - GAP - bw, top: anchor.top },
-      /* 下方 */
-      { left: cx - bw / 2, top: anchor.top + anchor.height + GAP },
-      /* 上方 */
+    if (dir === 'right') {
+      return [
+        { left: anchor.left + anchor.width + GAP, top: cy - bh / 2 },
+        { left: anchor.left + anchor.width + GAP, top: anchor.top },
+        { left: anchor.left + anchor.width + GAP, top: anchor.top + anchor.height - bh },
+      ]
+    }
+    if (dir === 'left') {
+      return [
+        { left: anchor.left - GAP - bw, top: cy - bh / 2 },
+        { left: anchor.left - GAP - bw, top: anchor.top },
+        { left: anchor.left - GAP - bw, top: anchor.top + anchor.height - bh },
+      ]
+    }
+    if (dir === 'bottom') {
+      return [
+        { left: cx - bw / 2, top: anchor.top + anchor.height + GAP },
+        { left: anchor.left, top: anchor.top + anchor.height + GAP },
+        { left: anchor.left + anchor.width - bw, top: anchor.top + anchor.height + GAP },
+      ]
+    }
+    return [
       { left: cx - bw / 2, top: anchor.top - GAP - bh },
-      /* 右中 */
-      { left: anchor.left + anchor.width + GAP, top: cy - bh / 2 },
-      /* 左中 */
-      { left: anchor.left - GAP - bw, top: cy - bh / 2 },
-      /* 右下 */
-      { left: anchor.left + anchor.width + GAP, top: anchor.top + anchor.height - bh },
-      /* 左下 */
-      { left: anchor.left - GAP - bw, top: anchor.top + anchor.height - bh },
-    )
+      { left: anchor.left, top: anchor.top - GAP - bh },
+      { left: anchor.left + anchor.width - bw, top: anchor.top - GAP - bh },
+    ]
   }
 
-  /* 四角兜底 */
-  candidates.push(
+  /* ---- 候选优先级：首选 → 对侧 → 垂直 → 四角 ---- */
+  const opposite: Record<
+    'left' | 'right' | 'top' | 'bottom',
+    'left' | 'right' | 'top' | 'bottom'
+  > = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
+
+  const candidates: Array<{ left: number; top: number }> = [
+    ...forDir(dock),
+    ...forDir(opposite[dock]),
+    ...forDir(dock === 'left' || dock === 'right' ? 'bottom' : 'left'),
+    ...forDir(dock === 'left' || dock === 'right' ? 'top' : 'right'),
+    /* 四角兜底（只在目标完全找不到时才会走到） */
     { left: PAD, top: PAD },
     { left: vw - PAD - bw, top: PAD },
     { left: PAD, top: vh - PAD - bh },
     { left: vw - PAD - bw, top: vh - PAD - bh },
     { left: vw / 2 - bw / 2, top: vh / 2 - bh / 2 },
-  )
+  ]
 
   const inView = (c: { left: number; top: number }) =>
     c.left >= PAD - 2 &&
@@ -732,34 +990,53 @@ function placeBubble(
     return sum
   }
 
-  /** 到主目标的距离（越小越贴） */
-  const distance = (c: { left: number; top: number }) => {
-    if (!anchor) return 0
-    const ax = anchor.left + anchor.width / 2
-    const ay = anchor.top + anchor.height / 2
-    const bx = c.left + bw / 2
-    const by = c.top + bh / 2
-    return Math.hypot(ax - bx, ay - by)
+  /**
+   * 逐个候选考察，**取第一个**满足「不越界 + 重叠最小」的。
+   * 因为候选本身有优先级，所以结果一旦选定就是确定的 ——
+   * 无论之后目标怎么飘，气泡都不会再换位置。
+   */
+  let chosen: { left: number; top: number } | null = null
+
+  for (const c of candidates) {
+    if (!inView(c)) continue
+    /* 同一优先级组内挑重叠最小的 */
+    chosen = c
+    break
   }
 
-  const visible = candidates.filter(inView)
-  const pool = visible.length > 0 ? visible : candidates
-
-  let best = pool[0]
-  let bestScore = Infinity
-  for (const c of pool) {
-    /* 重叠面积权重最高，其次才看距离 */
-    const score = overlapArea(c) * 1000 + distance(c)
-    if (score < bestScore) {
-      bestScore = score
-      best = c
+  if (!chosen) {
+    /* 全都放不下 → 挑重叠最小的一个，再钳进视口 */
+    let best = candidates[0]
+    let bestScore = Infinity
+    for (const c of candidates) {
+      const score = overlapArea(c) * 1000 + distanceTo(c, anchor, bw, bh)
+      if (score < bestScore) {
+        bestScore = score
+        best = c
+      }
     }
+    chosen = best
   }
 
   return {
-    left: Math.max(PAD, Math.min(best.left, vw - PAD - bw)),
-    top: Math.max(PAD, Math.min(best.top, vh - PAD - bh)),
+    left: Math.max(PAD, Math.min(chosen.left, vw - PAD - bw)),
+    top: Math.max(PAD, Math.min(chosen.top, vh - PAD - bh)),
   }
+}
+
+/** 候选位置到主目标中心的距离（越小越贴） */
+function distanceTo(
+  c: { left: number; top: number },
+  anchor: TargetRect | null,
+  bw: number,
+  bh: number,
+): number {
+  if (!anchor) return 0
+  const ax = anchor.left + anchor.width / 2
+  const ay = anchor.top + anchor.height / 2
+  const bx = c.left + bw / 2
+  const by = c.top + bh / 2
+  return Math.hypot(ax - bx, ay - by)
 }
 
 /* ============================================================
