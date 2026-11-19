@@ -28,7 +28,7 @@ export default {
         {
           "title": "筑路的人",
           "subtitle": "战略规划",
-          "field": "把长期目标拆成能走通的步骤，替一群人找到方向",
+          "field": "把三年的大目标拆成这周能做完的三件事，别人问起来你能一句话说清",
           "signs": [
             "capricorn",
             "aquarius",
@@ -38,7 +38,7 @@ export default {
         {
           "title": "点火的人",
           "subtitle": "统筹全局",
-          "field": "在没有路的地方带头走，让一队人愿意跟上来",
+          "field": "大家都在犹豫怎么开头时，你先搭出一个能用的粗糙版本",
           "signs": [
             "aries",
             "leo"
@@ -47,7 +47,7 @@ export default {
         {
           "title": "解题的人",
           "subtitle": "技术攻坚",
-          "field": "直面最硬的那块骨头，在细节里找到出口",
+          "field": "别人已经放弃的那个坑，你愿意蹲下去一行一行地读，最后把它填上",
           "signs": [
             "scorpio",
             "virgo",
@@ -128,7 +128,7 @@ export default {
         {
           "title": "搭骨架的人",
           "subtitle": "深度研究",
-          "field": "长期钻进一个问题，用扎实的证据把它说清楚",
+          "field": "一个问题你能连查三个月资料，最后拿一份带出处的报告说话",
           "signs": [
             "virgo",
             "scorpio",
@@ -138,7 +138,7 @@ export default {
         {
           "title": "翻译者",
           "subtitle": "教育传播",
-          "field": "把一件难事讲到别人愿意学、记得住、用得上",
+          "field": "你讲的东西别人听完能照着做一遍，第二天还跟同事提起",
           "signs": [
             "gemini",
             "sagittarius"
@@ -147,7 +147,7 @@ export default {
         {
           "title": "造物的人",
           "subtitle": "艺术创想",
-          "field": "从零构思并做出一个能拿在手里的东西",
+          "field": "脑子里冒出一个想法，你当天就动手做出一个能给别人看的东西",
           "signs": [
             "pisces",
             "leo",
@@ -228,7 +228,7 @@ export default {
         {
           "title": "收束的人",
           "subtitle": "团队领导",
-          "field": "让一屋子人有共同的方向，也能各做各的",
+          "field": "开会时大家各说各的，你能把话头收拢成一件大家接下来各自去做的事",
           "signs": [
             "leo",
             "capricorn"
@@ -237,7 +237,7 @@ export default {
         {
           "title": "维护关系的人",
           "subtitle": "人脉经营",
-          "field": "把关系当成长期的事，在关键时刻找到对的人",
+          "field": "认识的人你一直记着，需要帮忙那天你能想起该找谁",
           "signs": [
             "cancer",
             "libra"
@@ -246,7 +246,7 @@ export default {
         {
           "title": "翻译彼此的人",
           "subtitle": "沟通表达",
-          "field": "把两个人各自的意思互相讲明白",
+          "field": "两边都有情绪时，你能把各自想要的东西翻译成对方能听懂的话",
           "signs": [
             "aquarius",
             "pisces"
@@ -326,7 +326,7 @@ export default {
         {
           "title": "织网的人",
           "subtitle": "资源整合",
-          "field": "把散落的人和资源拼成一件完整的事",
+          "field": "缺人缺钱缺材料，你一圈问下来，最后把事凑齐了",
           "signs": [
             "taurus",
             "cancer",
@@ -336,7 +336,7 @@ export default {
         {
           "title": "守望的人",
           "subtitle": "风险预判",
-          "field": "提前看见隐患，为最坏的情况留一条路",
+          "field": "还没出事你就先想到可能出岔子的地方，备好了一条退路",
           "signs": [
             "scorpio",
             "capricorn",
@@ -346,7 +346,7 @@ export default {
         {
           "title": "谈价的人",
           "subtitle": "价值谈判",
-          "field": "谈条件、争取利益，在博弈里守住底线",
+          "field": "该争的你敢开口谈，谈不拢也不会因为怕尴尬就把条件全让了",
           "signs": [
             "gemini",
             "leo",

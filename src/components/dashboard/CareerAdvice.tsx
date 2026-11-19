@@ -1,9 +1,5 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  VersionToggle,
-  type ReportVersion,
-} from '../common/VersionToggle'
+import { usePanelVersion } from '../common/PanelVersionContext'
 import { CareerGlyph, CycleGlyph, SparkGlyph } from '../common/AstroGlyphs'
 import type { CareerAdviceResult } from '../../lib/api'
 
@@ -35,30 +31,16 @@ interface CareerAdviceProps {
   result: CareerAdviceResult
   /** 主题强调色 */
   accent: string
-  /**
-   * 受控版本（可选）。
-   *
-   * 传了就用外部的版本状态 —— 这样「优势挖掘实践」面板顶部
-   * 的那个胶囊切换键，和这里的结果区共用同一个状态，
-   * 用户在任何位置切换都是**秒切、无等待**。
-   */
-  version?: ReportVersion
-  /** 版本变更回调（配合受控 version 使用） */
-  onVersionChange?: (v: ReportVersion) => void
 }
 
-export function CareerAdvice({
-  result,
-  accent,
-  version: controlledVersion,
-  onVersionChange,
-}: CareerAdviceProps) {
-  const [localVersion, setLocalVersion] = useState<ReportVersion>('minimal')
-  const version = controlledVersion ?? localVersion
-  const setVersion = (v: ReportVersion) => {
-    if (controlledVersion === undefined) setLocalVersion(v)
-    onVersionChange?.(v)
-  }
+export function CareerAdvice({ result, accent }: CareerAdviceProps) {
+  /*
+   * v18.0 · 版本状态来自面板头
+   *
+   * 面板头那颗「⚡️ 极简直给版 | 🔭 深度剖析版」胶囊
+   * 与这里的结果区共用同一份状态 —— 切一下，整页跟着换。
+   */
+  const { version } = usePanelVersion()
 
   const { minimal, deep } = result
 
@@ -80,7 +62,7 @@ export function CareerAdvice({
 
   return (
     <div className="career-advice">
-      {/* ---------- 头部 + 版本切换 ---------- */}
+      {/* ---------- 头部 ---------- */}
       <header className="mb-8 flex flex-col items-center gap-5 sm:flex-row sm:justify-between">
         <div className="text-center sm:text-left">
           <p className="eyebrow text-gold">CAREER DIRECTION</p>
@@ -88,7 +70,25 @@ export function CareerAdvice({
             适合你的职位与行动方向
           </h3>
         </div>
-        <VersionToggle value={version} onChange={setVersion} />
+        {/* ---------- v18.0 · 版本标识条 ---------- */}
+        <span
+          className="shrink-0 rounded-full px-4 py-2 text-[0.8125rem] font-bold tracking-[0.18em]"
+          style={
+            version === 'minimal'
+              ? {
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(244,246,250,0.62)',
+                  border: '1px solid rgba(255,255,255,0.13)',
+                }
+              : {
+                  background: `${accent}22`,
+                  color: accent,
+                  border: `1px solid ${accent}44`,
+                }
+          }
+        >
+          {version === 'minimal' ? '⚡️ 极简直给版' : '🔭 深度剖析版'}
+        </span>
       </header>
 
       {/* ============================================================

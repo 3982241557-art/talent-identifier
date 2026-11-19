@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  VersionToggle,
-  type ReportVersion,
-} from '../common/VersionToggle'
+import { usePanelVersion } from '../common/PanelVersionContext'
 import {
   CYCLE_NODES,
   SKILL_LIBRARY,
@@ -51,22 +48,19 @@ interface AdvantagePracticeProps {
   mbti: unknown
   /** 用户填写完成后的回调（用于生成 AI 建议） */
   onRequestAdvice?: (payload: AdvantageState) => void
-  /**
-   * 双版本状态（受控）。
-   *
-   * v17.4：面板**顶部**的「⚡️ 极简直给版 | 🔭 深度剖析版」
-   * 胶囊键与下方 AI 推演结果共用同一份状态 —— 任何位置切换都秒切。
-   */
-  version?: ReportVersion
-  onVersionChange?: (v: ReportVersion) => void
 }
 
 export function AdvantagePractice({
   accent,
   onRequestAdvice,
-  version,
-  onVersionChange,
 }: AdvantagePracticeProps) {
+  /*
+   * v18.0 · 双版本状态来自面板头
+   *
+   * 面板头那颗胶囊切换时，整个面板（含下方 AI 推演结果）
+   * 一起换版 —— 用户不用在面板里到处找切换器。
+   */
+  const { version } = usePanelVersion()
   /* ---------- 状态 ---------- */
   const [state, setState] = useState<AdvantageState>(EMPTY_ADVANTAGE)
   const [loaded, setLoaded] = useState(false)
@@ -148,12 +142,27 @@ export function AdvantagePractice({
               每填完一格，那一格和它射出的箭头就会亮起来。
             </p>
           </div>
-          {/* ---------- 双版本切换（面板顶部，与 AI 结果区共用状态） ---------- */}
-          <VersionToggle
-            value={version ?? 'minimal'}
-            onChange={(v) => onVersionChange?.(v)}
-            className="shrink-0"
-          />
+          {/* ---------- v18.0 · 版本标识条 ----------
+              真正的切换键在面板头（和「收起」同一行），
+              这里只标一下当前在看哪一版。 */}
+          <span
+            className="shrink-0 rounded-full px-4 py-2 text-[0.8125rem] font-bold tracking-[0.18em]"
+            style={
+              version === 'minimal'
+                ? {
+                    background: 'rgba(255,255,255,0.07)',
+                    color: 'rgba(244,246,250,0.62)',
+                    border: '1px solid rgba(255,255,255,0.13)',
+                  }
+                : {
+                    background: `${accent}22`,
+                    color: accent,
+                    border: `1px solid ${accent}44`,
+                  }
+            }
+          >
+            {version === 'minimal' ? '⚡️ 极简直给版' : '🔭 深度剖析版'}
+          </span>
         </header>
 
         <div className="relative mx-auto flex max-w-[980px] flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-center lg:gap-4">

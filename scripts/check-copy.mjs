@@ -88,6 +88,27 @@ const BANNED_SENTENCE = [
   { re: /不是[^，。！？；、\n]{0,30}[。.]\s*[^，。！？；、\n]{0,20}是/, label: '不是…。是…' },
 ]
 
+/*
+ * 规则一之二：生硬词汇 + 空洞抽象词。
+ *
+ * 这些词单看都正常，连成句子就变成「AI 在讲话」——
+ * 没有具体画面，用户读完不知道该干嘛。
+ */
+const BANNED_WORDS = [
+  { w: '发力方式', label: '发力方式' },
+  { w: '发力点', label: '发力点' },
+  { w: '抓手', label: '抓手' },
+  { w: '天花板', label: '天花板' },
+  { w: '破圈', label: '破圈' },
+  { w: '价值主张', label: '价值主张' },
+  { w: '底层驱动力', label: '底层驱动力' },
+  { w: '能量场', label: '能量场' },
+  { w: '赋能', label: '赋能' },
+  { w: '颗粒度', label: '颗粒度' },
+  { w: '底层逻辑', label: '底层逻辑' },
+  { w: '开启探索', label: '开启探索' },
+]
+
 console.log('\n【文案校验 · v16.0】\n')
 
 /* ---- 1. 禁用句式 ---- */
@@ -117,6 +138,47 @@ console.log('\n【文案校验 · v16.0】\n')
   }
   check(
     `禁用句式「不是…而是」等 —— 扫描 ${files.length} 个文件`,
+    hits.length === 0,
+    hits.slice(0, 12).join('\n      '),
+  )
+}
+
+/* ---- 1.2 生硬词汇 / 空洞抽象词 ---- */
+{
+  /*
+   * 扫描 src/ 下的**用户可见文案**。
+   *
+   * server/ 与 functions/ 里这些词出现在「禁令清单」中（必须出现），
+   * 所以只扫 src/。
+   * src/ 里的 sanitize/copy 类文件带有词级替换表 ——
+   * 那些行含有正则特征（`/…/g`），一并跳过。
+   */
+  const visibleFiles = files.filter((f) => f.includes(`${root}/src/`))
+  const hits = []
+  for (const f of visibleFiles) {
+    const src = readFileSync(f, 'utf-8')
+    src.split(/\r?\n/).forEach((line, i) => {
+      const trimmed = line.trim()
+      if (
+        trimmed.startsWith('*') ||
+        trimmed.startsWith('//') ||
+        trimmed.startsWith('/*')
+      ) {
+        return
+      }
+      /* 词级替换表 / 词表声明 —— 跳过 */
+      if (/\/g[,\s]/.test(line) || /\]\s*,\s*$/.test(trimmed)) return
+      for (const { w, label } of BANNED_WORDS) {
+        if (line.includes(w)) {
+          hits.push(
+            `${relative(root, f)}:${i + 1}  [${label}]  ${trimmed.slice(0, 80)}`,
+          )
+        }
+      }
+    })
+  }
+  check(
+    `生硬词汇 / 空洞抽象词（发力方式、抓手、天花板…）`,
     hits.length === 0,
     hits.slice(0, 12).join('\n      '),
   )

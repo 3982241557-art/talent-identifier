@@ -338,8 +338,8 @@ export const SCENE_CARDS: SceneCardSpec[] = [
     z: 34, angle: 180, floatDur: 12.4, floatDelay: 1.4, tilt: 2.2,
   },
   {
-    id: 'history',
-    w: 208, h: 160, side: -1, vy: 0.83, yJitter: -8,
+    id: 'advantage',
+    w: 234, h: 182, side: -1, vy: 0.83, yJitter: -8,
     z: -24, angle: 180, floatDur: 13.2, floatDelay: 3.4, tilt: 2.9,
   },
   {

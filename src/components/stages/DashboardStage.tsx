@@ -20,8 +20,12 @@ import { TarotOverlay } from '../dashboard/TarotOverlay'
 import { SpotlightTutorial } from '../dashboard/SpotlightTutorial'
 import { AdvantagePractice } from '../dashboard/AdvantagePractice'
 import { CareerAdvice } from '../dashboard/CareerAdvice'
-import type { ReportVersion } from '../common/VersionToggle'
-import { TelescopeGlyph, CycleGlyph } from '../common/AstroGlyphs'
+import {
+  VersionToggle,
+  type ReportVersion,
+} from '../common/VersionToggle'
+import { PanelVersionContext, usePanelVersion } from '../common/PanelVersionContext'
+import { TelescopeGlyph } from '../common/AstroGlyphs'
 import { postCareerAdvice, type CareerAdviceResult } from '../../lib/api'
 import type { AdvantageState } from '../../lib/advantage'
 import {
@@ -223,14 +227,6 @@ export function DashboardStage({
   const [careerError, setCareerError] = useState('')
   /** 新手引导重看 */
   const [guideReplay, setGuideReplay] = useState(false)
-  /**
-   * v17.4 · 双版本共享状态
-   *
-   * 「优势挖掘实践」面板顶部的胶囊键 与 下方 AI 推演结果区
-   * 共用这一份状态 —— 任意位置切换都是 0 延迟秒切。
-   */
-  const [advantageVersion, setAdvantageVersion] =
-    useState<ReportVersion>('minimal')
 
   const requestCareer = useCallback(
     async (advantage: AdvantageState) => {
@@ -356,10 +352,10 @@ export function DashboardStage({
       accent: theme.primary,
     },
     {
-      id: 'history',
-      label: 'PAST',
-      title: '往日运势',
-      hint: `${state.profile.days.length} 条记录`,
+      id: 'advantage',
+      label: 'ADVANTAGE',
+      title: '优势挖掘实践',
+      hint: '点亮优势飞轮 · 划掉不擅长的',
       accent: theme.secondary,
     },
     {
@@ -369,7 +365,7 @@ export function DashboardStage({
       hint: `${turns.length} 条消息`,
       accent: theme.primary,
     },
-  ], [theme.primary, theme.secondary, mbti, state.profile.days.length, turns.length])
+  ], [theme.primary, theme.secondary, mbti, turns.length])
 
   /** 环绕卡片（不含塔罗入口）—— 带上屏幕空间落位 */
   const orbitPositions = useMemo(
@@ -685,7 +681,9 @@ export function DashboardStage({
                     ? 'talent'
                     : o.id === 'fortune'
                       ? 'fortune'
-                      : undefined
+                      : o.id === 'advantage'
+                        ? 'advantage'
+                        : undefined
               }
               style={{
                 left: o.placed.layout.left,
@@ -743,45 +741,6 @@ export function DashboardStage({
           )}
         </main>
 
-        {/* ============================================================
-            v17.0 · 入口 1：核心悬浮卡片 —— 优势挖掘实践
-            放在 main 与 footer 之间，**不覆盖**中央星盘。
-            ============================================================ */}
-        <motion.button
-          data-spot="advantage-float"
-          onClick={() => setOverlay('advantage')}
-          initial={{ opacity: 0, y: 22 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.1, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="group mx-auto flex shrink-0 items-center gap-5 rounded-[22px] border-0 px-8 py-4 text-left"
-          style={{
-            background:
-              'linear-gradient(120deg, rgba(245,194,107,0.13), rgba(12,18,32,0.78))',
-            border: '1px solid rgba(245,194,107,0.28)',
-            boxShadow:
-              '0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,194,107,0.12) inset',
-            backdropFilter: 'blur(20px) saturate(155%)',
-          }}
-        >
-          <span style={{ color: '#f5c26b' }}>
-            <CycleGlyph size={24} />
-          </span>
-          <span>
-            <span className="block text-[clamp(0.9375rem,1.05vw,1.2rem)] font-bold tracking-[0.14em] text-mist">
-              优势挖掘实践
-            </span>
-            <span className="mt-0.5 block text-[clamp(0.75rem,0.82vw,0.9375rem)] font-medium tracking-[0.08em] text-mist/55">
-              点亮你的优势飞轮 · 划掉不擅长的事 · 算出适合你的职位
-            </span>
-          </span>
-          <span
-            className="shrink-0 text-[clamp(1rem,1.2vw,1.35rem)] transition-transform duration-700 group-hover:translate-x-1.5"
-            style={{ color: '#f5c26b' }}
-          >
-            →
-          </span>
-        </motion.button>
-
         {/* ---------- 页脚 ---------- */}
         <footer className="shrink-0 pt-3 text-center">
           <p className="text-[clamp(0.6875rem,0.75vw,0.875rem)] font-semibold tracking-[0.26em] text-mist/50">
@@ -791,6 +750,17 @@ export function DashboardStage({
                 } · 经纬度 ${chart.coordinates?.latitude?.toFixed(2)}, ${chart.coordinates?.longitude?.toFixed(2)}`
               : '本地推演星盘 · 星象给的是倾向，不是判决'}
           </p>
+          {/* ---------- 往日运势记录入口 ----------
+             v18.0：「往日运势」卡片被「优势挖掘实践」替换掉了，
+             但存下来的历史记录还得有地方看 —— 放在页脚，不占版面。 */}
+          {state.profile.days.length > 0 && (
+            <button
+              onClick={() => setOverlay('history')}
+              className="mt-2 border-0 bg-transparent pb-0.5 text-[clamp(0.75rem,0.82vw,0.9375rem)] font-semibold tracking-[0.22em] text-mist/45 transition-colors duration-700 hover:text-mist focus:outline-none"
+            >
+              往日运势 · {state.profile.days.length} 条记录 →
+            </button>
+          )}
         </footer>
         </div>
       </ParallaxSpace>
@@ -800,11 +770,13 @@ export function DashboardStage({
            首次进入主页时，逐个高亮四周的悬浮卡片，
            配一句话说明这个板块是干嘛的。
            ============================================================ */}
-      {/* ---------- v17.0 · 游戏化聚光灯新手指引（6 步） ---------- */}
+      {/* ---------- v18.0 · 游戏化原位高亮新手指引 ---------- */}
       <SpotlightTutorial
         force={guideReplay}
         accent={theme.primary}
         onDone={() => setGuideReplay(false)}
+        onOpenOverlay={(id) => setOverlay(id)}
+        onOverlayClosed={() => setOverlay(null)}
       />
 
       {/* ---------- 展开覆盖层 ---------- */}
@@ -854,8 +826,6 @@ export function DashboardStage({
                   chart={chart}
                   mbti={mbti}
                   onRequestAdvice={requestCareer}
-                  version={advantageVersion}
-                  onVersionChange={setAdvantageVersion}
                 />
 
                 {/* ---------- AI 职位建议结果 ---------- */}
@@ -893,12 +863,7 @@ export function DashboardStage({
 
                 {career && !careerLoading && (
                   <div className="mt-12">
-                    <CareerAdvice
-                      result={career}
-                      accent={theme.primary}
-                      version={advantageVersion}
-                      onVersionChange={setAdvantageVersion}
-                    />
+                    <CareerAdvice result={career} accent={theme.primary} />
                   </div>
                 )}
               </div>
@@ -931,67 +896,24 @@ export function DashboardStage({
                     />
                   </div>
 
-                  <div className="mt-6 border-t border-white/10 pt-6">
-                    {/* 相位术语换成白话 */}
-                    <p className="serif-body text-[16px] font-semibold leading-[1.6] text-mist/80">
-                      {chart.aspects[0]
-                        ? `今天你身上有两种力量在互相拉扯：${
-                            aspectPlain(
-                              chart.aspects[0].aCn ?? chart.aspects[0].a,
-                            )
-                          }和${
-                            aspectPlain(
-                              chart.aspects[0].bCn ?? chart.aspects[0].b,
-                            )
-                          }。`
-                        : '今天你身上的力量很统一，没有互相拉扯。'}
-                      {chart.aspects[0]
-                        ? '天空安静的时候，正好听听自己。'
-                        : '安静的一天，留给自己。'}
-                    </p>
+                  {/*
+                    v18.0 · 深度版才展开的「今天在发生什么」
+                    ——
+                    极简版：四张短卡扫完就收。
+                    深度版：再讲清今天身上哪两股力量在拉扯、
+                    哪几颗星在走、为什么。
+                  */}
+                  <FortuneDeepDetail
+                    chart={chart}
+                    onRecord={handleRecordFortune}
+                  />
 
-                    {/*
-                     * v17.0 · 今天在走的能量
-                     *
-                     * 只列**有据可依**的项：
-                     *   · 逆行的行星（会反复、会往回收）
-                     *   · 有明确白话映射的行星
-                     * 认不出的行星直接跳过 —— 绝不用废话凑数。
-                     */}
-                    {(() => {
-                      const items = chart.planets
-                        .map((p) => ({
-                          cn: p.planetCn,
-                          text: planetPlain(p.planetCn, p.retrograde),
-                          house: housePlain(p.house),
-                        }))
-                        .filter((x) => x.text)
-                      if (items.length === 0) return null
-                      return (
-                        <div className="mt-6 space-y-2.5 border-t border-white/10 pt-6">
-                          <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/50">
-                            今 天 在 走 的 能 量
-                          </p>
-                          {items.map((x) => (
-                            <p
-                              key={x.cn}
-                              className="text-[15.5px] font-medium leading-[1.6] text-mist/70"
-                            >
-                              {x.text}
-                              {x.house ? ` —— ${x.house}` : ''}
-                            </p>
-                          ))}
-                        </div>
-                      )
-                    })()}
-
-                    <button
-                      onClick={handleRecordFortune}
-                      className="mt-5 border-0 bg-transparent pb-0.5 text-[15px] font-bold tracking-[0.28em] text-mist/70 transition-colors duration-700 hover:text-mist focus:outline-none"
-                    >
-                      存入往日运势 →
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleRecordFortune}
+                    className="mt-5 border-0 bg-transparent pb-0.5 text-[15px] font-bold tracking-[0.28em] text-mist/70 transition-colors duration-700 hover:text-mist focus:outline-none"
+                  >
+                    存入往日运势 →
+                  </button>
                 </FortuneCard>
               </div>
             )}
@@ -1094,6 +1016,73 @@ export function DashboardStage({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+/* ============================================================
+ *  v18.0 · 今日运势的深度版专属段落
+ *
+ *  极简版：整页只留四张短卡，扫完就收。
+ *  深度版：再补上「今天身上哪两股力量在拉扯」与
+ *          「哪几颗星在走」——解释清楚为什么是��个走向。
+ * ============================================================ */
+function FortuneDeepDetail({
+  chart,
+  onRecord,
+}: {
+  chart: Chart
+  onRecord: () => void
+}) {
+  const { version } = usePanelVersion()
+
+  if (version !== 'deep') return null
+
+  const items = chart.planets
+    .map((p) => ({
+      cn: p.planetCn,
+      text: planetPlain(p.planetCn, p.retrograde),
+      house: housePlain(p.house),
+    }))
+    .filter((x) => x.text)
+
+  return (
+    <div className="mt-6 border-t border-white/10 pt-6">
+      {/* 相位术语换成白话 */}
+      <p className="serif-body text-[16px] font-semibold leading-[1.6] text-mist/80">
+        {chart.aspects[0]
+          ? `今天你身上有两种力量在互相拉扯：${
+              aspectPlain(chart.aspects[0].aCn ?? chart.aspects[0].a)
+            }和${aspectPlain(chart.aspects[0].bCn ?? chart.aspects[0].b)}。`
+          : '今天你身上的力量很统一，没有互相拉扯。'}
+        {chart.aspects[0]
+          ? '天空安静的时候，正好听听自己。'
+          : '安静的一天，留给自己。'}
+      </p>
+
+      {items.length > 0 && (
+        <div className="mt-6 space-y-2.5 border-t border-white/10 pt-6">
+          <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/50">
+            今 天 在 走 的 能 量
+          </p>
+          {items.map((x) => (
+            <p
+              key={x.cn}
+              className="text-[15.5px] font-medium leading-[1.6] text-mist/70"
+            >
+              {x.text}
+              {x.house ? ` —— ${x.house}` : ''}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={onRecord}
+        className="mt-5 border-0 bg-transparent pb-0.5 text-[15px] font-bold tracking-[0.28em] text-mist/70 transition-colors duration-700 hover:text-mist focus:outline-none"
+      >
+        存入往日运势 →
+      </button>
     </div>
   )
 }
@@ -1309,13 +1298,26 @@ function OverlayPanel({
   title,
   accent,
   onClose,
+  /** 是否在顶部显示双版本切换胶囊 */
+  showVersionToggle = true,
   children,
 }: {
   title: string
   accent: string
   onClose: () => void
+  showVersionToggle?: boolean
   children: React.ReactNode
 }) {
+  /*
+   * v18.0 · 双版本状态提升到面板头
+   *
+   * 状态放在这里（而不是各个子组件里），
+   * 一来切换胶囊能顶置到「收起」同一行，
+   * 二来所有子组件（天赋解析 / AI 建议…）共用同一份状态，
+   * 不会出现「头切了、内容没动」的割裂。
+   */
+  const [version, setVersion] = useState<ReportVersion>('minimal')
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1345,24 +1347,37 @@ function OverlayPanel({
         aria-modal="true"
         aria-label={title}
       >
-        {/* 面板头 */}
-        <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-10 py-6">
+        {/* 面板头 —— 标题 + 顶置双版本切换 + 收起 */}
+        <header
+          data-spot="panel-header"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-white/10 px-10 py-5"
+        >
           <h3 className="serif-title text-[clamp(1.375rem,1.6vw,2rem)] font-semibold tracking-[0.1em] text-mist">
             {title}
           </h3>
-          <button
-            onClick={onClose}
-            aria-label="关闭"
-            className="border border-white/16 px-5 py-2 text-[15px] font-semibold tracking-[0.22em] text-mist/80 transition-colors duration-500 hover:border-white/35 hover:text-mist focus:outline-none"
-          >
-            收起 ▲
-          </button>
+
+          {/* ---------- v18.0 · 双版本切换顶置 ----------
+              与「收起」同一行，第一眼就能看到。 */}
+          <div className="flex items-center gap-5">
+            {showVersionToggle && (
+              <VersionToggle value={version} onChange={setVersion} />
+            )}
+            <button
+              onClick={onClose}
+              aria-label="关闭"
+              className="border border-white/16 px-5 py-2 text-[15px] font-semibold tracking-[0.22em] text-mist/80 transition-colors duration-500 hover:border-white/35 hover:text-mist focus:outline-none"
+            >
+              收起 ▲
+            </button>
+          </div>
         </header>
 
-        {/* 面板内容 */}
-        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-10 py-9">
-          {children}
-        </div>
+        {/* 面板内容 —— 共享同一份版本状态 */}
+        <PanelVersionContext.Provider value={{ version, setVersion }}>
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-10 py-9">
+            {children}
+          </div>
+        </PanelVersionContext.Provider>
       </motion.div>
     </motion.div>
   )

@@ -367,6 +367,7 @@ export function TarotOverlay({
                 loading={readingLoading}
                 version={version}
                 onVersionChange={setVersion}
+                showToggle
               />
             </motion.div>
           </>
@@ -399,6 +400,13 @@ export function TarotOverlay({
             {alreadyDrawn ? '今日已抽' : shuffling ? '洗牌中' : '选一张'}
           </h3>
           <span className="block h-px w-24 bg-white/15" />
+
+          {/* ---------- v18.0 · 双版本切换顶置 ----------
+              放在标题正下方、牌阵正上方 —— 第一眼就能看到，
+              不用翻牌之后再往下找。 */}
+          <div className="mt-3">
+            <VersionToggle value={version} onChange={setVersion} />
+          </div>
         </header>
 
         {/* ---------- 牌阵区（向上微微拱起的扇形） ---------- */}
@@ -610,12 +618,15 @@ function ReadingPanel({
   loading,
   version,
   onVersionChange,
+  showToggle = false,
 }: {
   card: TarotCard
   reading: TarotReading | null
   loading: boolean
   version?: ReportVersion
   onVersionChange?: (v: ReportVersion) => void
+  /** 聚光灯翻牌状态下，解析浮层里也要能切版本 */
+  showToggle?: boolean
 }) {
   /* v16.0：取当前版本的内容 */
   const v = version ?? DEFAULT_VERSION
@@ -627,15 +638,27 @@ function ReadingPanel({
   const hasBoth =
     Boolean(reading?.minimal) && Boolean(reading?.deep)
 
+  /* ---------- v18.0 · 两版结构完全不同 ----------
+   * ⚡️ 极简版：牌名 + 一句话 + 一个今天能做完的小动作。
+   * 🔭 深度版：牌名 + 牌面本身讲了什么 + 一句点题
+   *           + 展开的长解读 + 今天的动作 + 牌义出处。
+   */
+  const isMinimal = v === 'minimal'
+
   return (
-    <div className="flex w-full max-w-[640px] flex-col items-center text-center">
-      {/* ══════════ v16.0 · 双版本切换胶囊 ══════════ */}
-      {hasBoth && onVersionChange && (
-        <div className="sticky top-2 z-20 mb-6 flex justify-center">
+    <div
+      className={
+        isMinimal
+          ? 'flex w-full max-w-[560px] flex-col items-center text-center'
+          : 'flex w-full max-w-[820px] flex-col items-center text-center'
+      }
+    >
+      {/* ---------- 翻牌聚光下的版本切换 ---------- */}
+      {showToggle && hasBoth && onVersionChange && (
+        <div className="mb-5">
           <VersionToggle value={v} onChange={onVersionChange} />
         </div>
       )}
-
       {/* ---------- 牌名 ---------- */}
       <h4
         className="serif-title text-[clamp(1.75rem,2.6vw,2.75rem)] font-semibold tracking-[0.16em]"
@@ -647,8 +670,19 @@ function ReadingPanel({
         {card.name}
       </h4>
 
+      {/* ---------- 深度版：先讲牌面本身 ---------- */}
+      {!isMinimal && (
+        <p
+          className="serif-body mt-3 max-w-[640px] text-[clamp(0.9375rem,1.05vw,1.125rem)] font-medium leading-[1.75] text-mist/62"
+        >
+          这张牌说的事情是：{card.meaning}
+        </p>
+      )}
+
       {/* ---------- 一句点题 ---------- */}
-      <p className="serif-body mt-3 text-[clamp(1.0625rem,1.2vw,1.375rem)] font-medium leading-[1.7] text-mist/80">
+      <p
+        className="serif-body mt-3 text-[clamp(1.0625rem,1.2vw,1.375rem)] font-medium leading-[1.7] text-mist/80"
+      >
         {src?.gist ?? card.meaning}
       </p>
 
@@ -667,13 +701,37 @@ function ReadingPanel({
       >
         今 日 一 件 小 事
       </p>
-      <p className="serif-body mt-2.5 text-[clamp(1.0625rem,1.25vw,1.5rem)] font-semibold leading-[1.72] text-mist">
+      <p
+        className={
+          isMinimal
+            ? 'serif-body mt-2.5 text-[clamp(1.0625rem,1.25vw,1.5rem)] font-semibold leading-[1.72] text-mist'
+            : 'serif-body mt-2.5 max-w-[720px] text-[clamp(1rem,1.15vw,1.3125rem)] font-medium leading-[1.85] text-mist/88'
+        }
+      >
         {src
           ? src.action
           : loading
             ? '正在为你挑一件小事……'
             : card.tip}
       </p>
+
+      {/* ---------- 深度版：加一段「怎么用这张牌」 ---------- */}
+      {!isMinimal && (
+        <div
+          className="mt-7 w-full max-w-[720px] rounded-[18px] border px-7 py-6 text-left"
+          style={{
+            borderColor: `${card.hue}30`,
+            background: 'rgba(9,14,26,0.55)',
+          }}
+        >
+          <p className="mb-3 text-[0.6875rem] font-bold tracking-[0.3em] text-ink-mute">
+            这 张 牌 用 起 来 是 这 样
+          </p>
+          <p className="serif-body text-[clamp(0.9375rem,1.05vw,1.125rem)] font-medium leading-[1.85] text-mist/75">
+            {card.essence}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

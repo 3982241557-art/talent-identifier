@@ -1,9 +1,5 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  VersionToggle,
-  type ReportVersion,
-} from '../common/VersionToggle'
+import { usePanelVersion } from '../common/PanelVersionContext'
 import type { MbtiProfile } from '../../types'
 import { MBTI_TYPES } from '../../data/mbtiTypes'
 import { AXIS_PLAIN, splitType } from '../../data/mbtiPlain'
@@ -29,15 +25,12 @@ interface MbtiHubProps {
 
 export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
   /*
-   * v17.0 · 双版本切换
+   * v18.0 · 双版本切换已顶置到面板头
    *
-   * ⚡️ 极简直给版：一句话结论 + 三个白话优势 + 今日行动
-   * 🔭 深度剖析版：完整含义 + 优势清单 + 盲区 + 四个字母详解 + 名人共鸣
-   *
-   * 极简版的内容**全部来自本地数据**（MBTI_TYPES），
-   * 不需要额外请求 —— 切换是 0 延迟秒切。
+   * 这里直接读面板级共享状态 —— 面板头那颗胶囊切一下，
+   * 整页内容结构跟着换，不用往下滚找切换器。
    */
-  const [version, setVersion] = useState<ReportVersion>('minimal')
+  const { version } = usePanelVersion()
 
   if (!mbti) {
     return (
@@ -91,11 +84,6 @@ export function MbtiHub({ mbti, accent, accent2, onEdit }: MbtiHubProps) {
             )}
           </div>
         </div>
-      </div>
-
-      {/* ---------- v17.0 · 双版本切换 ---------- */}
-      <div className="mt-6 flex justify-end">
-        <VersionToggle value={version} onChange={setVersion} />
       </div>
 
       <span

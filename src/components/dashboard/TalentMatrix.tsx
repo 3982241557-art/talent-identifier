@@ -10,11 +10,7 @@ import { ELEMENT_THEMES } from '../../data/elementThemes'
 import { CycleGlyph } from '../common/AstroGlyphs'
 import { computeTalent } from '../../lib/talent'
 import { postTalent } from '../../lib/api'
-import {
-  VersionToggle,
-  DEFAULT_VERSION,
-  type ReportVersion,
-} from '../common/VersionToggle'
+import { usePanelVersion } from '../common/PanelVersionContext'
 
 /* ============================================================
  *  天赋解析 · 几何天赋矩阵（v12.0）
@@ -109,12 +105,13 @@ export function TalentMatrix({
   }, [result])
 
   /*
-   * v16.0 · 双版本切换
+   * v18.0 · 双版本切换已顶置到面板头
    *
-   * 后端一次返回 minimal（3-5 条短句）与 deep（3-5 段话），
-   * 这里只切数据 —— 不发请求，切换 0 延迟。
+   * 这里读面板级共享状态 —— 面板头那颗胶囊切一下，
+   * **整页结构**跟着换：极简版是清爽的结论卡，
+   * 深度版展开成带引文、详解的长文。
    */
-  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
+  const { version } = usePanelVersion()
 
   const handleAnalyse = async () => {
     setLoading(true)
@@ -392,117 +389,260 @@ export function TalentMatrix({
           className="mt-10 overflow-hidden"
         >
           {/*
-            v12.0 · 任务 2 · 2×2 CSS Grid 矩阵
+            v18.0 · 双版本整页替换
             ------------------------------------------------
-            · grid-template-columns: repeat(2, 1fr)
-            · 每张卡 h-full —— 同一排高度绝对一致
-            · min-h-[320px] —— 四张卡的下限对齐
-            · 窄屏（<768px）退化为单列，不挤压内容
+            ⚡️ 极简直给版：四张清爽短卡（领域名 + 结论 + 一句练习），
+               不带引文、不带长篇解析，3 秒扫完。
+            🔭 深度剖析版：2×2 完整矩阵，每张卡带引文、详解、
+               优势、练习，再往下是「每一年适合做的事」和落地建议。
+            —— 切换时**整页结构**都换，不是只换几行字。
           */}
-          <div data-talent-grid className="grid">
-            {result.categories.map((c) => (
-              <article
-                key={c.key}
-                data-talent-card={c.key}
-                className="border border-white/10 bg-white/5 px-7 py-7 backdrop-blur-md"
-              >
-                {/* ---------- 头部：领域名 + 分数 ---------- */}
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <p className="text-[12.5px] font-bold tracking-[0.34em] text-mist/45">
-                      {c.label}
-                    </p>
-                    <h4 className="serif-title mt-1.5 text-[clamp(1.25rem,1.5vw,1.9rem)] font-semibold tracking-[0.1em] text-mist">
+          {version === 'minimal' ? (
+            /* ---------- ⚡️ 极简直给版 ---------- */
+            <div className="space-y-8">
+              <div className="flex items-center gap-3">
+                <span
+                  className="rounded-full px-3 py-0.5 text-[0.625rem] font-bold tracking-[0.26em]"
+                  style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    color: 'rgba(244,246,250,0.62)',
+                    border: '1px solid rgba(255,255,255,0.13)',
+                  }}
+                >
+                  ⚡️ 极简直给版
+                </span>
+                <span className="text-[0.75rem] font-medium tracking-[0.18em] text-ink-mute">
+                  四个方向 · 每块一句话
+                </span>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {result.categories.map((c) => (
+                  <article
+                    key={c.key}
+                    data-talent-card={c.key}
+                    className="rounded-[20px] border px-7 py-6"
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.11)',
+                      background: 'rgba(9,14,26,0.6)',
+                    }}
+                  >
+                    <div className="flex items-baseline justify-between gap-4">
+                      <p className="text-[0.6875rem] font-bold tracking-[0.3em] text-mist/45">
+                        {c.label}
+                      </p>
+                      <span
+                        className="serif-title text-[1.5rem] font-semibold"
+                        style={{ color: theme.primary }}
+                      >
+                        {c.score}
+                      </span>
+                    </div>
+                    <h4
+                      className="serif-title mt-2 text-[clamp(1.125rem,1.35vw,1.6rem)] font-semibold tracking-[0.08em] text-mist"
+                    >
                       {c.title}
                     </h4>
-                  </div>
-                  <span
-                    className="serif-title shrink-0 text-[clamp(1.5rem,1.9vw,2.4rem)] font-semibold"
-                    style={{ color: theme.primary }}
-                  >
-                    {c.score}
-                  </span>
-                </div>
-
-                {/* ---------- 角色定义（v12.0：每个领域独有） ---------- */}
-                <div className="mt-3 h-px w-full bg-white/10">
-                  <div
-                    className="h-px transition-all duration-[1200ms]"
-                    style={{
-                      width: `${c.score}%`,
-                      background: theme.primary,
-                    }}
-                  />
-                </div>
-
-                <div
-                  className="mt-6 border-l-2 pl-4"
-                  style={{ borderColor: theme.primary }}
-                >
-                  <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
-                    适 合 做 什 么
-                  </p>
-                  <p
-                    data-talent-subtitle
-                    className="serif-title mt-2 text-[clamp(1.125rem,1.35vw,1.7rem)] font-semibold tracking-[0.06em]"
-                    style={{ color: theme.primary }}
-                  >
-                    {c.subtitle || c.field}
-                  </p>
-                  {c.field && (
-                    <p className="serif-body mt-2 text-[18px] font-medium leading-[1.58] text-mist/82">
-                      {c.field}
+                    <p className="serif-body mt-2 text-[1rem] font-medium leading-[1.65] text-mist/75">
+                      {c.subtitle || c.field}
                     </p>
-                  )}
-                </div>
+                    {c.practice && (
+                      <p className="serif-body mt-3 text-[0.9375rem] font-medium leading-[1.6] text-mist/52">
+                        <span style={{ color: theme.primary }}>今天练一下：</span>
+                        {c.practice}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* ---------- 🔭 深度剖析版 ---------- */
+            <div>
+              <div
+                className="mb-8 flex items-center gap-4 border-b pb-4"
+                style={{ borderColor: `${theme.primary}33` }}
+              >
+                <span
+                  className="rounded-full px-3.5 py-1 text-[0.6875rem] font-bold tracking-[0.28em]"
+                  style={{
+                    background: `${theme.primary}22`,
+                    color: theme.primary,
+                    border: `1px solid ${theme.primary}44`,
+                  }}
+                >
+                  🔭 深度剖析版
+                </span>
+                <span className="text-[0.8125rem] font-medium tracking-[0.2em] text-ink-mute">
+                  逐块拆开 · 带引文、详解与练习
+                </span>
+              </div>
 
-                {/*
-                  v12.0 · 任务 3 · 人类先哲原句
-                  --------------------------------
-                  语料库直出，一字不改。
-                  出处用小字标注，保留文化厚度。
-                */}
-                {c.quote && (
-                  <figure className="mt-6 border-t border-white/8 pt-5">
-                    <blockquote
-                      className="serif-title text-[clamp(1.0625rem,1.25vw,1.45rem)] font-medium leading-[1.72] tracking-[0.04em] text-mist/88"
+              {/*
+                v12.0 · 任务 2 · 2×2 CSS Grid 矩阵
+                ------------------------------------------------
+                · grid-template-columns: repeat(2, 1fr)
+                · 每张卡 h-full —— 同一排高度绝对一致
+                · min-h-[320px] —— 四张卡的下限对齐
+                · 窄屏（<768px）退化为单列，不挤压内容
+              */}
+              <div data-talent-grid className="grid">
+                {result.categories.map((c) => (
+                  <article
+                    key={c.key}
+                    data-talent-card={c.key}
+                    className="border border-white/10 bg-white/5 px-7 py-7 backdrop-blur-md"
+                  >
+                    {/* ---------- 头部：领域名 + 分数 ---------- */}
+                    <div className="flex items-baseline justify-between gap-4">
+                      <div>
+                        <p className="text-[12.5px] font-bold tracking-[0.34em] text-mist/45">
+                          {c.label}
+                        </p>
+                        <h4 className="serif-title mt-1.5 text-[clamp(1.25rem,1.5vw,1.9rem)] font-semibold tracking-[0.1em] text-mist">
+                          {c.title}
+                        </h4>
+                      </div>
+                      <span
+                        className="serif-title shrink-0 text-[clamp(1.5rem,1.9vw,2.4rem)] font-semibold"
+                        style={{ color: theme.primary }}
+                      >
+                        {c.score}
+                      </span>
+                    </div>
+
+                    {/* ---------- 角色定义（v12.0：每个领域独有） ---------- */}
+                    <div className="mt-3 h-px w-full bg-white/10">
+                      <div
+                        className="h-px transition-all duration-[1200ms]"
+                        style={{
+                          width: `${c.score}%`,
+                          background: theme.primary,
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      className="mt-6 border-l-2 pl-4"
+                      style={{ borderColor: theme.primary }}
                     >
-                      「{c.quote}」
-                    </blockquote>
-                    <figcaption className="mt-2 text-[13.5px] font-semibold tracking-[0.22em] text-mist/38">
-                      —— {c.quoteSource}
-                    </figcaption>
-                  </figure>
-                )}
+                      <p className="text-[12.5px] font-bold tracking-[0.32em] text-mist/55">
+                        适 合 做 什 么
+                      </p>
+                      <p
+                        data-talent-subtitle
+                        className="serif-title mt-2 text-[clamp(1.125rem,1.35vw,1.7rem)] font-semibold tracking-[0.06em]"
+                        style={{ color: theme.primary }}
+                      >
+                        {c.subtitle || c.field}
+                      </p>
+                      {c.field && (
+                        <p className="serif-body mt-2 text-[18px] font-medium leading-[1.58] text-mist/82">
+                          {c.field}
+                        </p>
+                      )}
+                    </div>
 
-                {/* ---------- 专属解析 ---------- */}
-                {c.description && (
-                  <p
-                    data-talent-description
-                    className="serif-body mt-5 text-[19.5px] font-medium leading-[1.62] text-mist/78"
-                  >
-                    {c.description}
-                  </p>
-                )}
+                    {/*
+                      v12.0 · 任务 3 · 人类先哲原句
+                      --------------------------------
+                      语料库直出，一字不改。
+                      出处用小字标注，保留文化厚度。
+                    */}
+                    {c.quote && (
+                      <figure className="mt-6 border-t border-white/8 pt-5">
+                        <blockquote
+                          className="serif-title text-[clamp(1.0625rem,1.25vw,1.45rem)] font-medium leading-[1.72] tracking-[0.04em] text-mist/88"
+                        >
+                          「{c.quote}」
+                        </blockquote>
+                        <figcaption className="mt-2 text-[13.5px] font-semibold tracking-[0.22em] text-mist/38">
+                          —— {c.quoteSource}
+                        </figcaption>
+                      </figure>
+                    )}
 
-                {/* ---------- 优势 ---------- */}
-                {c.strength && (
-                  <p
-                    data-talent-strength
-                    className="serif-body mt-4 text-[18.5px] font-medium leading-[1.6] text-mist/58"
-                  >
-                    {c.strength}
-                  </p>
-                )}
+                    {/* ---------- 专属解析 ---------- */}
+                    {c.description && (
+                      <p
+                        data-talent-description
+                        className="serif-body mt-5 text-[19.5px] font-medium leading-[1.62] text-mist/78"
+                      >
+                        {c.description}
+                      </p>
+                    )}
 
-                {/* ---------- 练习 ---------- */}
-                <p className="serif-body mt-auto pt-6 text-[19.5px] font-medium leading-[1.62] text-mist/68">
-                  <span style={{ color: theme.primary }}>练习：</span>
-                  {c.practice}
-                </p>
-              </article>
-            ))}
-          </div>
+                    {/* ---------- 优势 ---------- */}
+                    {c.strength && (
+                      <p
+                        data-talent-strength
+                        className="serif-body mt-4 text-[18.5px] font-medium leading-[1.6] text-mist/58"
+                      >
+                        {c.strength}
+                      </p>
+                    )}
+
+                    {/* ---------- 练习 ---------- */}
+                    <p className="serif-body mt-auto pt-6 text-[19.5px] font-medium leading-[1.62] text-mist/68">
+                      <span style={{ color: theme.primary }}>练习：</span>
+                      {c.practice}
+                    </p>
+                  </article>
+                ))}
+              </div>
+
+              {/* 每年适合做的事 */}
+              {result.yearly.length > 0 && (
+                <div className="mt-12 border-t border-white/8 pt-8">
+                  <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
+                    每一年适合做的事
+                  </h4>
+                  <div className="mt-7 space-y-7">
+                    {result.yearly.map((y) => (
+                      <div key={y.year} className="flex gap-6">
+                        <span
+                          className="serif-title shrink-0 pt-0.5 text-[28.5px] tracking-[0.1em]"
+                          style={{ color: theme.primary }}
+                        >
+                          {y.year}
+                        </span>
+                        <div>
+                          <p className="text-[24px] tracking-[0.1em] text-mist/88">
+                            {y.focus}
+                          </p>
+                          <p className="serif-body mt-2 text-[21px] leading-[1.6] text-mist/50">
+                            {y.action}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 落地建议 */}
+              {result.advice.length > 0 && (
+                <div className="mt-12 border-t border-white/8 pt-8">
+                  <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
+                    落地建议
+                  </h4>
+                  <ul className="mt-6 space-y-4">
+                    {result.advice.map((a, i) => (
+                      <li key={i} className="flex gap-4">
+                        <span
+                          className="mt-[13px] block h-1 w-1 shrink-0 rounded-full"
+                          style={{ background: theme.primary }}
+                        />
+                        <p className="serif-body text-[21px] leading-[1.62] text-mist/55">
+                          {a}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 补充现状 + 重新测算 */}
           <div className="mt-12 border-t border-white/8 pt-8">
@@ -542,59 +682,18 @@ export function TalentMatrix({
             </div>
           </div>
 
-          {/* 每年适合做的事 */}
-          {result.yearly.length > 0 && (
-            <div className="mt-12 border-t border-white/8 pt-8">
-              <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
-                每一年适合做的事
-              </h4>
-              <div className="mt-7 space-y-7">
-                {result.yearly.map((y) => (
-                  <div key={y.year} className="flex gap-6">
-                    <span
-                      className="serif-title shrink-0 pt-0.5 text-[28.5px] tracking-[0.1em]"
-                      style={{ color: theme.primary }}
-                    >
-                      {y.year}
-                    </span>
-                    <div>
-                      <p className="text-[24px] tracking-[0.1em] text-mist/88">
-                        {y.focus}
-                      </p>
-                      <p className="serif-body mt-2 text-[21px] leading-[1.6] text-mist/50">
-                        {y.action}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════ v16.0 · 双版本切换 + 摘要 ══════════ */}
+          {/* ══════════ v18.0 · 极简版的一句话摘要 ══════════ */}
           {(() => {
             const minimal = result.minimal ?? []
-            const deep = result.deep ?? []
-            /* 只要有一版内容就显示切换器 —— 本地兜底也有两版 */
-            const hasBoth = minimal.length > 0 || deep.length > 0
-
-            if (!hasBoth) return null
-
-            const list = version === 'minimal' ? minimal : deep
+            if (minimal.length === 0) return null
 
             return (
               <div className="mt-12 border-t border-white/8 pt-8">
-                {/* 切换胶囊 —— sticky，用户随时能切 */}
-                <div className="sticky top-2 z-20 mb-8 flex justify-center">
-                  <VersionToggle value={version} onChange={setVersion} />
-                </div>
-
                 <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
-                  {version === 'minimal' ? '一眼看清' : '把来龙去脉聊透'}
+                  一眼看清
                 </h4>
-
                 <ul className="mt-6 space-y-4">
-                  {list.map((line, i) => (
+                  {minimal.map((line, i) => (
                     <li key={i} className="flex gap-4">
                       <span
                         className="mt-[13px] block h-1 w-1 shrink-0 rounded-full"
@@ -602,16 +701,7 @@ export function TalentMatrix({
                       />
                       <p
                         className="serif-body leading-[1.62] text-mist"
-                        style={{
-                          fontSize:
-                            version === 'minimal'
-                              ? 'clamp(1.15rem,1.3vw,1.5rem)'
-                              : 'clamp(1rem,1.15vw,1.3rem)',
-                          color:
-                            version === 'minimal'
-                              ? 'var(--color-mist)'
-                              : 'rgba(244,246,250,0.78)',
-                        }}
+                        style={{ fontSize: 'clamp(1.15rem,1.3vw,1.5rem)' }}
                       >
                         {line}
                       </p>
@@ -622,31 +712,9 @@ export function TalentMatrix({
             )
           })()}
 
-          {/* 落地建议 */}
-          {result.advice.length > 0 && (
-            <div className="mt-12 border-t border-white/8 pt-8">
-              <h4 className="text-[22.5px] font-semibold tracking-[0.16em] text-mist/85">
-                落地建议
-              </h4>
-              <ul className="mt-6 space-y-4">
-                {result.advice.map((a, i) => (
-                  <li key={i} className="flex gap-4">
-                    <span
-                      className="mt-[13px] block h-1 w-1 shrink-0 rounded-full"
-                      style={{ background: theme.primary }}
-                    />
-                    <p className="serif-body text-[21px] leading-[1.62] text-mist/55">
-                      {a}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {/* ============================================================
               v17.0 · 入口 2：底部引导横幅
-              从「看天赋」到「做实践」的强闭环。
+              从「看天赋」到「动手做」的引导。
               ============================================================ */}
           {onGoAdvantage && (
             <div className="mt-12 border-t border-white/8 pt-9">

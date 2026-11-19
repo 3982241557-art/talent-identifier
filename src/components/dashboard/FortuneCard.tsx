@@ -2,12 +2,7 @@ import { motion } from 'framer-motion'
 import type { Chart } from '../../types'
 import { ELEMENT_THEMES } from '../../data/elementThemes'
 import { deAstro } from '../../lib/copy'
-import {
-  VersionToggle,
-  DEFAULT_VERSION,
-  type ReportVersion,
-} from '../common/VersionToggle'
-import { useState } from 'react'
+import { usePanelVersion } from '../common/PanelVersionContext'
 import type { FortuneDimension, MultiFortuneResult } from '../../lib/api'
 import type { ReactElement } from 'react'
 import {
@@ -121,13 +116,13 @@ export function FortuneDimensions({
   accent: string
 }) {
   /*
-   * v16.0 · 双版本切换
+   * v18.0 · 双版本切换已顶置到面板头
    *
-   * 后端一次返回 minimal 与 deep 两份，
-   * 这里只切数据源 —— **不发请求、不 loading**，
-   * 切换是 0 延迟的。
+   * 这里读面板级共享状态 —— 面板头那颗胶囊切一下，
+   * 整页结构跟着换：极简版是四张清爽短卡，
+   * 深度版才展开趋势与预警。
    */
-  const [version, setVersion] = useState<ReportVersion>(DEFAULT_VERSION)
+  const { version } = usePanelVersion()
 
   if (!result || result.dimensions.length === 0) {
     return (
@@ -153,17 +148,34 @@ export function FortuneDimensions({
   const cap = version === 'minimal' ? 52 : 88
   const trendCap = version === 'minimal' ? 0 : 92
 
-  /* 只要任一版本存在就显示切换器（本地兜底也有两版） */
-  const hasBoth = Boolean(result.minimal) || Boolean(result.deep)
-
   return (
     <div className="w-full">
-      {/* ══════════ v16.0 · 双版本切换胶囊 ══════════ */}
-      {hasBoth && (
-        <div className="sticky top-2 z-20 mb-7 flex justify-center">
-          <VersionToggle value={version} onChange={setVersion} />
-        </div>
-      )}
+      {/* ---------- v18.0 · 版本标识条 ---------- */}
+      <div className="mb-7 flex items-center gap-3">
+        <span
+          className="rounded-full px-3 py-0.5 text-[0.625rem] font-bold tracking-[0.26em]"
+          style={
+            version === 'minimal'
+              ? {
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(244,246,250,0.62)',
+                  border: '1px solid rgba(255,255,255,0.13)',
+                }
+              : {
+                  background: `${accent}22`,
+                  color: accent,
+                  border: `1px solid ${accent}44`,
+                }
+          }
+        >
+          {version === 'minimal' ? '⚡️ 极简直给版' : '🔭 深度剖析版'}
+        </span>
+        <span className="text-[0.75rem] font-medium tracking-[0.18em] text-ink-mute">
+          {version === 'minimal'
+            ? '今天这块怎么样 · 一句话'
+            : '为什么会这样 · 接下来会怎样 · 留意哪一点'}
+        </span>
+      </div>
 
       {current.overview && (
         <p className="serif-body mb-7 border-l-2 pl-6 text-[18px] font-semibold leading-[1.6] text-mist/90"
@@ -186,8 +198,21 @@ export function FortuneDimensions({
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.08 * i, ease: 'easeOut' }}
-              className="border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-md"
-              style={{ boxShadow: '0 14px 44px rgba(0,0,0,0.3)' }}
+              /* v18.0：两版卡片的**形制**不同 ——
+                 极简版是圆润短卡，深度版是带分隔线的长文块。 */
+              className={
+                version === 'minimal'
+                  ? 'rounded-[18px] border px-6 py-6'
+                  : 'border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-md'
+              }
+              style={
+                version === 'minimal'
+                  ? {
+                      borderColor: 'rgba(255,255,255,0.11)',
+                      background: 'rgba(9,14,26,0.6)',
+                    }
+                  : { boxShadow: '0 14px 44px rgba(0,0,0,0.3)' }
+              }
             >
               {/* 维度标题 */}
               <div className="flex items-center gap-3">
@@ -360,7 +385,7 @@ export function localFortune(
         `同样的事落在你身上，你的第一反应和别人不一样。`,
       /* v17.0：全部锁定在今天 24 小时内，不出现长周期表述 */
       trend:
-        `${meta.trend}。${dimMeta.label}的节奏是先理顺、再发力。` +
+        `${meta.trend}。${dimMeta.label}的节奏是先理顺、再动手。` +
         `先把资源归位，再谈投入。` +
         `可以盯的信号：${signals}。`,
       warning:
