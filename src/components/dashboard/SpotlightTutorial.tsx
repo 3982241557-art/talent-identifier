@@ -500,6 +500,8 @@ export function SpotlightTutorial({
    * ============================================================ */
   const maskId = 'spotlight-cutout'
   const cssMaskId = 'spotlight-cutout-css'
+  /** 点击捕手用的裁剪区 —— 把「洞」从可点击范围里真正剪掉 */
+  const catcherClipId = 'spotlight-catcher-clip'
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
   const vh = typeof window !== 'undefined' ? window.innerHeight : 900
 
@@ -713,14 +715,42 @@ export function SpotlightTutorial({
         />
       ))}
 
-      {/* 遮罩层本身要能接收点击（关闭） */}
+      {/*
+        遮罩层本身要能接收点击（关闭）。
+
+        【v18.2 · 点击穿透修复】
+        旧写法：`<path fillRule="evenodd" fill="transparent" />`
+        —— `transparent` 在 SVG 里依然是**已绘制**状态，
+        evenodd 挖出来的洞**照样会被命中**，
+        于是「洞里的目标」点不动（用户看到的正是这个症状）。
+
+        新写法：用 `clipPath` 把「洞」从可点击区域里**真正剪掉**。
+        剪掉之后，洞里的坐标不再属于任何可点击形状，
+        事件直接落到下层的真实卡片上 —— 引导时也能点开面板。
+      */}
       {clickCatcherPath && (
         <svg
           className="absolute inset-0 h-full w-full"
           style={{ pointerEvents: 'auto' }}
           onClick={finish}
         >
-          <path d={clickCatcherPath} fillRule="evenodd" fill="transparent" />
+          <defs>
+            {/*
+              注意：clipPath 里的多个子元素是**并集**，
+              那样只会把洞「加」回来。
+              要让洞真正被剪掉，必须：
+                · 整条路径写成**一个** <path>（外框 + 所有洞）
+                · 配合 clipRule="evenodd"（奇偶规则 → 洞内不填充）
+            */}
+            <clipPath id={catcherClipId} clipPathUnits="userSpaceOnUse">
+              <path d={clickCatcherPath} clipRule="evenodd" />
+            </clipPath>
+          </defs>
+          <path
+            d={`M 0 0 H ${vw} V ${vh} H 0 Z`}
+            fill="transparent"
+            clipPath={`url(#${catcherClipId})`}
+          />
         </svg>
       )}
 

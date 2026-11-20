@@ -340,7 +340,19 @@ export const SCENE_CARDS: SceneCardSpec[] = [
   {
     id: 'advantage',
     w: 234, h: 182, side: -1, vy: 0.83, yJitter: -8,
-    z: -24, angle: 180, floatDur: 13.2, floatDelay: 3.4, tilt: 2.9,
+    /*
+     * 【v18.2 · 点击穿透修复】
+     *
+     * 原来是 **z: -24（负值）** ——
+     * 在 `preserve-3d` 上下文里，负 Z 深度会让这张卡片
+     * 渲染到 `main` 自身的背景平面**之后**，
+     * 于是鼠标命中测试直接落到 main 上，
+     * 卡片点起来「完全没反应」。
+     *
+     * 改成正值后，它仍然排在 chat(34) / mbti(92) / talent(118) 之后，
+     * 前后的层次感一点没丢，但不再被 main 挡住。
+     */
+    z: 8, angle: 180, floatDur: 13.2, floatDelay: 3.4, tilt: 2.9,
   },
   {
     id: 'talent',

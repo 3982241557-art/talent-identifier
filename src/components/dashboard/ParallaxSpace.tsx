@@ -357,7 +357,29 @@ export function ParallaxCore({ children, className = '', style }: LayerProps) {
    * 于是它的旋转中心 == 星盘中心 —— 星盘真正"钉"在原地。
    */
   return (
-    <div className={className} style={style}>
+    <div
+      className={className}
+      style={{
+        /*
+         * 【v18.2 · 点击穿透修复】
+         *
+         * 星盘层的外壳是 `absolute inset-0` —— 撑满整个 main，
+         * 它虽然**完全看不见**，却会吃掉落在它身上的所有鼠标事件。
+         *
+         * 而「优势挖掘实践」卡片的 3D 深度是 **-24（负值）**，
+         * 在 `preserve-3d` 上下文里，**3D 深度优先于 z-index** ——
+         * 所以哪怕卡片设了 `z-index: 20`，
+         * 它依然排在这个外壳**后面**，鼠标事件直接穿透到 main。
+         *
+         * 解法：外壳整体 `pointer-events: none`，
+         * 只把真正的星盘本体（`[data-spot="astrolabe"]`）单独打开。
+         * 星盘自身的 hover 交互照常工作，
+         * 而这圈撑满全屏的空白容器不再拦截任何点击。
+         */
+        pointerEvents: 'none',
+        ...style,
+      }}
+    >
       {/*
         内层用 absolute + left-1/2/top-1/2 锚定中心，
         再用 translate(-50%, -50%) 把自身拉回去。
@@ -379,6 +401,7 @@ export function ParallaxCore({ children, className = '', style }: LayerProps) {
           rotateX,
           rotateY,
           transformStyle: 'preserve-3d',
+          pointerEvents: 'none',
         }}
       >
         {children}
@@ -458,6 +481,26 @@ export function ParallaxCard({
         y,
         z: depth,
         transformStyle: 'preserve-3d',
+        /*
+         * 【v18.2 · 点击穿透修复】
+         *
+         * 之前卡片的 z-index 是 `auto`，
+         * 而 `main` 又是 `position: relative` 的定位上下文 ——
+         * 于是**负 Z 深度的卡片**（advantage: z = -24）
+         * 会渲染到 `main` 的背景平面**后面**，
+         * 鼠标事件直接穿透到 main，点击永远落不到卡片上。
+         *
+         * 这里给每张卡片一个明确的正 z-index，
+         * 让它在自己的定位上下文里**始终浮在 main 平面之上**，
+         * 无论它的 3D 深度是正还是负。
+         *
+         * 注意：`position` **不能**在这里覆盖 ——
+         * 卡片靠 className 里的 `absolute` 定位，
+         * 一旦改成 relative 就会脱离布局、掉到画面外。
+         * `absolute` 本身已经是定位元素，z-index 天然生效。
+         */
+        zIndex: 20,
+        pointerEvents: 'auto',
         ...style,
       }}
     >

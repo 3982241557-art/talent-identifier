@@ -647,6 +647,13 @@ export function DashboardStage({
                 data-spot="astrolabe"
                 style={{
                   filter: `drop-shadow(0 0 46px ${theme.primary}33) drop-shadow(0 22px 60px rgba(0,0,0,0.62))`,
+                  /*
+                   * 【v18.2】核心层整体关闭了 pointer-events，
+                   * 这里把**星盘本体**单独重新打开 ——
+                   * 星盘上的元素弧 hover 高亮照常工作，
+                   * 而外围那圈撑满全屏的空白容器不再拦截点击。
+                   */
+                  pointerEvents: 'auto',
                 }}
               >
                 <Astrolabe chart={chart} size={astrolabeSize} />
@@ -1169,6 +1176,22 @@ function OrbitCard({
           transform: `rotateZ(${tilt}deg)`,
           boxShadow:
             '0 22px 60px rgba(0,0,0,0.58), 0 2px 0 rgba(255,255,255,0.07) inset, 0 0 44px rgba(0,0,0,0.42)',
+          /*
+           * 【v18.2 · 点击穿透修复】
+           *
+           * 明确声明层级，杜绝被中央星盘的 SVG / Canvas 容器拦截：
+           *   · z-index: 20          —— 永远浮在星盘平面之上
+           *   · pointer-events: auto —— 明确参与命中测试
+           *
+           * （`position: relative` 由 className 里的 `relative` 提供，
+           *   这里不重复覆盖，避免和 Tailwind 类打架。）
+           *
+           * 「优势挖掘实践」卡片的 3D 深度曾经是 **-24（负值）**，
+           * 在 preserve-3d 上下文里会被 main 的背景平面挡住，
+           * 鼠标事件直接穿透 —— 点了完全没反应。
+           */
+          zIndex: 20,
+          pointerEvents: 'auto',
         }}
       >
         <span
