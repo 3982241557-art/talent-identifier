@@ -636,6 +636,87 @@ console.log('\n【文案校验 · v16.0】\n')
 }
 
 /* ============================================================
+ *  规则十一（v18.3）：点击穿透 —— 教程遮罩不得吞掉卡片点击
+ * ============================================================
+ *
+ *  【历史事故】
+ *  用户报「左下角优势挖掘实践卡片点不动」。
+ *  根因有两层：
+ *    1. 3D 负深度卡片被 main 平面挡住（v18.2 已修）；
+ *    2. **新手教程的遮罩 <svg> 根元素挂着 pointer-events: auto**，
+ *       整个 CSS 盒子都参与命中测试 ——
+ *       即使 path 用 clipPath 挖出了洞，
+ *       落在洞里的点击还是先被 <svg> 接住，到不了真实卡片。
+ *
+ *  教程对新用户是**自动弹出**的，
+ *  所以这等于「首次进入时所有卡片都点不动」。
+ */
+
+{
+  const tutPath = resolve(
+    root,
+    'src',
+    'components',
+    'dashboard',
+    'SpotlightTutorial.tsx',
+  )
+  const tut = readFileSync(tutPath, 'utf-8')
+
+  /* 遮罩 <svg> 根必须关闭 pointer-events */
+  const catcherSvg = tut.match(
+    /<svg[\s\S]{0,400}?style=\{\{\s*pointerEvents:\s*'([^']+)'\s*\}\}[\s\S]{0,400}?onClick=\{finish\}/,
+  )
+  check(
+    '教程遮罩 <svg> 根的 pointer-events 是 none',
+    catcherSvg?.[1] === 'none',
+    '必须是 none —— 否则整个视口的点击都被它吃掉，卡片点不动',
+  )
+
+  /* 真正承载「洞外点击」的 path 必须打开 pointer-events */
+  const catcherPath = tut.match(
+    /<path[\s\S]{0,300}?clipPath=\{`url\(#\$\{catcherClipId\}\)`\}[\s\S]{0,200}?pointerEvents:\s*'([^']+)'/,
+  )
+  check(
+    '教程遮罩 path 的 pointer-events 是 auto',
+    catcherPath?.[1] === 'auto',
+    '必须是 auto —— 否则点遮罩空白处关不掉教程',
+  )
+
+  /* clipPath 挖洞机制必须在 */
+  check(
+    '教程遮罩用 clipPath + clipRule=evenodd 挖洞',
+    /clipPath[\s\S]{0,200}?clipRule=["']evenodd["']/.test(tut),
+    '洞没挖出来 —— 洞里的目标就点不动',
+  )
+
+  /* 星盘核心层不得整层拦截点击 */
+  const dash = readFileSync(
+    resolve(root, 'src', 'components', 'stages', 'DashboardStage.tsx'),
+    'utf-8',
+  )
+  const parallax = readFileSync(
+    resolve(root, 'src', 'components', 'dashboard', 'ParallaxSpace.tsx'),
+    'utf-8',
+  )
+  const coreBlock = parallax.slice(parallax.indexOf('export function ParallaxCore'))
+  check(
+    '星盘核心层关闭 pointer-events（只开星盘本体）',
+    /pointerEvents:\s*'none'/.test(coreBlock.slice(0, 2000)),
+    '撑满全屏的核心层会吃掉所有点击',
+  )
+  check(
+    '六张悬浮卡片显式声明 pointer-events: auto',
+    /zIndex:\s*20[\s\S]{0,120}?pointerEvents:\s*'auto'/.test(parallax),
+    '卡片必须在 3D 场景里明确可点',
+  )
+  check(
+    '星盘本体单独打开 pointer-events（保留 hover 交互）',
+    /data-spot="astrolabe"[\s\S]{0,400}?pointerEvents:\s*'auto'/.test(dash),
+    '星盘上的元素弧 hover 会失效',
+  )
+}
+
+/* ============================================================
  *  汇总
  * ============================================================ */
 

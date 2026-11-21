@@ -731,7 +731,26 @@ export function SpotlightTutorial({
       {clickCatcherPath && (
         <svg
           className="absolute inset-0 h-full w-full"
-          style={{ pointerEvents: 'auto' }}
+          /*
+           * 【v18.3 · 点击穿透修复（补）】
+           *
+           * v18.2 只把「洞」从 path 的可点击区域里剪掉了，
+           * 但**这个 <svg> 根元素自己**还挂着 `pointerEvents: 'auto'`。
+           *
+           * 而 <svg> 作为 HTML 流里的替换元素，
+           * 它的**整个 CSS 盒子**都会参与命中测试 ——
+           * 于是即使 path 被 clipPath 剪出了洞，
+           * 落在洞里的点击还是先被这个 <svg> 接住，
+           * 根本到不了下层的真实卡片。
+           *
+           * 现象：教程进行时，「优势挖掘实践」等卡片点不动；
+           * 而教程一关掉，鼠标一切就正常 —— 因为那时 catcher 整个卸载了。
+           *
+           * 修法：<svg> 根元素关闭 pointer-events，
+           * 只让真正承载「洞外点击」的那个 <path> 打开。
+           * 事件依然会从 path 冒泡到 <svg> 的 onClick（关教程）。
+           */
+          style={{ pointerEvents: 'none' }}
           onClick={finish}
         >
           <defs>
@@ -750,6 +769,8 @@ export function SpotlightTutorial({
             d={`M 0 0 H ${vw} V ${vh} H 0 Z`}
             fill="transparent"
             clipPath={`url(#${catcherClipId})`}
+            /* 只有这块（洞外）才吃点击 —— 洞里直接穿透到真实卡片 */
+            style={{ pointerEvents: 'auto' }}
           />
         </svg>
       )}
